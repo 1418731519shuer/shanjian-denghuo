@@ -4,6 +4,9 @@
  * 复刻 script_gen.py 的三步管线到浏览器端：
  *   ① chat 生成分幕大纲 → ② 逐幕生成 scene JSON → ③ 前端校验 + LLM 修复（至多2轮）
  * 生成成功后自动做资源映射（背景/立绘 → 现有素材库），调引擎全局 loadScript() 载入开玩。
+ * 支持多家 OpenAI 兼容服务商（智谱GLM / 阶跃 / DeepSeek / Kimi / 自定义），
+ * 在模态框里切换，key 按服务商分开存本机 localStorage；某家不允许浏览器直连时
+ * 可改用本地命令行工具 tools/autonovel.py。
  *
  * 【集成方式】（由主线负责，本文件不修改 index.html）：
  *   1. 在 demo_gl/index.html 的 </body> 前加：
@@ -18,12 +21,24 @@
   'use strict';
 
   /* ================= 常量（译自 script_gen.py） ================= */
-  const API_URL = 'https://api.stepfun.com/v1/chat/completions';
-  const MODEL = 'step-3.7-flash';
+  // 服务商预设（OpenAI 兼容接口）：url 为 chat/completions 完整地址，
+  // site 为 key 获取平台，maxTokens 缺省用 MAX_TOKENS（glm-4-flash 输出上限 4095）
+  const PROVIDERS = {
+    glm:      { name: '智谱GLM（推荐，glm-4-flash 免费）', url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions', model: 'glm-4-flash', site: 'bigmodel.cn', maxTokens: 4095 },
+    step:     { name: '阶跃星辰', url: 'https://api.stepfun.com/v1/chat/completions', model: 'step-3.7-flash', site: 'platform.stepfun.com' },
+    deepseek: { name: 'DeepSeek（有免费额度活动）', url: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-chat', site: 'platform.deepseek.com' },
+    moonshot: { name: '月之暗面 Kimi', url: 'https://api.moonshot.cn/v1/chat/completions', model: 'moonshot-v1-8k', site: 'platform.moonshot.cn' },
+    custom:   { name: '自定义（OpenAI 兼容接口）', url: '', model: '', site: '' },
+  };
+  const DEFAULT_PROVIDER = 'glm';
   const MAX_PARSE_RETRY = 3;   // JSON 抽取失败重试次数
   const MAX_FIX_ROUND = 2;     // 校验失败让 LLM 修复的轮数上限
   const MAX_TOKENS = 8192;     // 一幕可能含多个 scene，太小会截断坏 JSON
-  const LS_KEY = 'autonovel_step_key'; // API key 的 localStorage 键
+  const LS_PROVIDER = 'autonovel_provider';       // 当前选中的服务商
+  const LS_CUSTOM_URL = 'autonovel_custom_url';   // 自定义 base URL
+  const LS_CUSTOM_MODEL = 'autonovel_custom_model'; // 自定义 model
+  const LS_KEY_PREFIX = 'autonovel_key_';         // 每个服务商的 key 分开存
+  const LS_KEY_LEGACY = 'autonovel_step_key';     // 旧版阶跃 key（迁移用）
 
   const SCENE_FIELDS = ['id', 'background', 'bgm', 'sfx', 'checkpoint', 'chars', 'script'];
   const CMD_TYPES = ['narrate', 'say', 'choice', 'set', 'goto', 'inspect', 'show', 'end'];
@@ -128,25 +143,36 @@
     return ext ? path.replace(/\.(png|jpg|jpeg)$/i, '.' + ext) : path;
   }
 
-  /* ================= LLM 调用（流式） ================= */
-  // 流式 chat：onDelta(累计文本) 实时回调，signal 用于取消
-  async function chatStream(apiKey, messages, onDelta, signal) {
-    const resp = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + apiKey,
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: messages,
-        max_tokens: MAX_TOKENS,
-        stream: true,
-      }),
-      signal: signal,
-    });
+  /* ================= LLM 调用（流式，OpenAI 兼容） ================= */
+  // 流式 chat：cfg = {url, model, key, maxTokens}；onDelta(累计文本) 实时回调，signal 用于取消
+  async function chatStream(cfg, messages, onDelta, signal) {
+    let resp;
+    try {
+      resp = await fetch(cfg.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + cfg.key,
+        },
+        body: JSON.stringify({
+          model: cfg.model,
+          messages: messages,
+          max_tokens: cfg.maxTokens || MAX_TOKENS,
+          stream: true,
+        }),
+        signal: signal,
+      });
+    } catch (e) {
+      if (e.name === 'AbortError') throw e;
+      // TypeError: Failed to fetch —— 多为服务商不允许浏览器跨域直连
+      throw new Error('无法连接该服务商（可能是它不允许浏览器直连）。' +
+        '请换一家服务商，或改用本地命令行工具 tools/autonovel.py');
+    }
     if (!resp.ok) {
       const txt = await resp.text().catch(() => '');
+      if (resp.status === 402) {
+        throw new Error('账户额度不足（HTTP 402），请充值或换一家服务商');
+      }
       if (resp.status === 401 || resp.status === 403) {
         throw new Error('API Key 无效或已过期（HTTP ' + resp.status + '），请检查后重试');
       }
@@ -182,7 +208,7 @@
 
   // 调 chat 并抽取 JSON；空返回/坏 JSON 重试，最后一次把错误塞回让模型修复
   // （译自 script_gen.py 的 chat_json）
-  async function chatJson(apiKey, userPrompt, onDelta, signal) {
+  async function chatJson(cfg, userPrompt, onDelta, signal) {
     const messages = [
       { role: 'system', content: SYSTEM_JSON },
       { role: 'user', content: userPrompt },
@@ -190,7 +216,7 @@
     let lastErr = '';
     for (let attempt = 0; attempt < MAX_PARSE_RETRY; attempt++) {
       if (signal && signal.aborted) throw new CancelError();
-      const text = await chatStream(apiKey, messages, onDelta, signal);
+      const text = await chatStream(cfg, messages, onDelta, signal);
       if (!text || !text.trim()) { lastErr = '空返回'; continue; }
       const m = text.match(/\{[\s\S]*\}/);
       if (!m) { lastErr = '返回中没有 JSON 对象'; continue; }
@@ -667,6 +693,7 @@
   const ui = {
     running: false,      // 是否正在生成
     abort: null,         // AbortController
+    providerId: null,    // 当前选中的服务商 id
     result: null,        // 生成成功的剧本 JSON
   };
 
@@ -712,9 +739,18 @@
       <input type="number" id="an-scenes" min="3" max="8" value="5" style="width:6em">
     </div>
     <div class="an-row">
-      <label>阶跃 API Key</label>
+      <label>服务商</label>
+      <select id="an-provider" class="an-input"></select>
+    </div>
+    <div class="an-row an-hidden" id="an-custom-row">
+      <label>自定义接口（OpenAI 兼容）</label>
+      <input type="text" id="an-base-url" placeholder="base URL，如 https://example.com/v1/chat/completions" style="margin-bottom:.4em">
+      <input type="text" id="an-model" placeholder="model，如 some-model-name">
+    </div>
+    <div class="an-row">
+      <label id="an-key-label">API Key</label>
       <input type="password" id="an-key" placeholder="只需填一次，本机保存">
-      <div class="an-hint">Key 可从 <b>platform.stepfun.com</b> 免费获取；仅保存在本机 localStorage，不会上传到别处。</div>
+      <div class="an-hint" id="an-key-hint">仅保存在本机 localStorage（按服务商分开存），不会上传到别处。</div>
     </div>
     <div class="an-actions">
       <button class="an-btn" id="an-generate">开始生成</button>
@@ -749,8 +785,52 @@
     $('an-play').onclick = playResult;
     // 初始两个角色行
     addCharRow(); addCharRow();
-    // 读取已保存的 key
-    $('an-key').value = localStorage.getItem(LS_KEY) || '';
+    initProviderUI();
+  }
+
+  /* ================= 服务商选择 ================= */
+  // 初始化服务商下拉：回填上次选择，绑定切换逻辑
+  function initProviderUI() {
+    const sel = $('an-provider');
+    for (const id in PROVIDERS) {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = PROVIDERS[id].name;
+      sel.appendChild(opt);
+    }
+    // 旧版阶跃 key 迁移到分服务商存储
+    const legacy = localStorage.getItem(LS_KEY_LEGACY);
+    if (legacy && !localStorage.getItem(LS_KEY_PREFIX + 'step')) {
+      localStorage.setItem(LS_KEY_PREFIX + 'step', legacy);
+    }
+    sel.value = localStorage.getItem(LS_PROVIDER) || DEFAULT_PROVIDER;
+    if (!PROVIDERS[sel.value]) sel.value = DEFAULT_PROVIDER;
+    sel.onchange = () => switchProvider(sel.value);
+    $('an-base-url').oninput = () => localStorage.setItem(LS_CUSTOM_URL, $('an-base-url').value.trim());
+    $('an-model').oninput = () => localStorage.setItem(LS_CUSTOM_MODEL, $('an-model').value.trim());
+    $('an-base-url').value = localStorage.getItem(LS_CUSTOM_URL) || '';
+    $('an-model').value = localStorage.getItem(LS_CUSTOM_MODEL) || '';
+    applyProvider(sel.value);
+  }
+
+  // 切换服务商：先把当前 key 存回旧服务商槽位，再载入新服务商的 key
+  function switchProvider(nextId) {
+    const prevId = ui.providerId;
+    if (prevId) localStorage.setItem(LS_KEY_PREFIX + prevId, $('an-key').value.trim());
+    localStorage.setItem(LS_PROVIDER, nextId);
+    applyProvider(nextId);
+  }
+
+  // 按服务商刷新界面：key 槽位、平台提示、自定义输入框显隐
+  function applyProvider(id) {
+    ui.providerId = id;
+    const p = PROVIDERS[id];
+    $('an-key').value = localStorage.getItem(LS_KEY_PREFIX + id) || '';
+    $('an-custom-row').classList.toggle('an-hidden', id !== 'custom');
+    $('an-key-label').textContent = p.site ? 'API Key（' + p.site + ' 获取）' : 'API Key';
+    $('an-key-hint').innerHTML = (p.site
+      ? 'Key 可从 <b>' + p.site + '</b> 获取；' : '') +
+      '仅保存在本机 localStorage（按服务商分开存），不会上传到别处。';
   }
 
   function addCharRow(name, desc) {
@@ -813,9 +893,20 @@
     if (chars.length < 2) throw new Error('至少需要 2 个有名字的角色');
     let nScenes = parseInt($('an-scenes').value, 10) || 5;
     nScenes = Math.max(3, Math.min(8, nScenes));
-    const key = $('an-key').value.trim();
-    if (!key) throw new Error('请填写阶跃 API Key（platform.stepfun.com 免费获取）');
-    return { theme, chars, nScenes, key };
+    // 服务商配置：预设直接取表，自定义取输入框
+    const pid = ui.providerId || DEFAULT_PROVIDER;
+    const p = PROVIDERS[pid];
+    const api = { url: p.url, model: p.model, maxTokens: p.maxTokens };
+    if (pid === 'custom') {
+      api.url = $('an-base-url').value.trim();
+      api.model = $('an-model').value.trim();
+      if (!api.url || !api.model) throw new Error('自定义服务商需要填写 base URL 和 model');
+    }
+    api.key = $('an-key').value.trim();
+    if (!api.key) {
+      throw new Error('请填写 API Key' + (p.site ? '（' + p.site + ' 获取）' : ''));
+    }
+    return { theme, chars, nScenes, providerId: pid, api };
   }
 
   async function startGenerate() {
@@ -823,7 +914,8 @@
     try {
       cfg = readForm();
     } catch (e) { alert(e.message); return; }
-    localStorage.setItem(LS_KEY, cfg.key); // key 只存本机
+    // key / 自定义接口参数只存本机（按服务商分开存）
+    localStorage.setItem(LS_KEY_PREFIX + cfg.providerId, cfg.api.key);
 
     ui.running = true;
     ui.abort = new AbortController();
@@ -836,8 +928,8 @@
       const { characters, cards } = parseChars(cfg.chars);
 
       // 第一步：分幕大纲
-      log('【1/3】生成分幕大纲 …');
-      const outline = await chatJson(cfg.key, buildOutlinePrompt(cfg.theme, cards, cfg.nScenes), streamPreview, signal);
+      log('【1/3】生成分幕大纲 …（' + PROVIDERS[cfg.providerId].name + ' / ' + cfg.api.model + '）');
+      const outline = await chatJson(cfg.api, buildOutlinePrompt(cfg.theme, cards, cfg.nScenes), streamPreview, signal);
       const acts = outline.acts || [];
       if (!acts.length) throw new Error('大纲为空，请换个题材描述重试');
       log('大纲共 ' + acts.length + ' 幕：' + acts.map(a => a.title || a.id).join(' / '), 'an-ok');
@@ -849,7 +941,7 @@
         if (signal.aborted) throw new CancelError();
         const act = acts[i];
         log('  第 ' + (i + 1) + '/' + acts.length + ' 幕「' + (act.title || act.id) + '」撰写中 …');
-        const data = await chatJson(cfg.key, buildScenePrompt(cfg.theme, cards, act, cfg.nScenes), streamPreview, signal);
+        const data = await chatJson(cfg.api, buildScenePrompt(cfg.theme, cards, act, cfg.nScenes), streamPreview, signal);
         const scenes = data.scenes || (data.id ? [data] : []);
         for (const s of scenes) {
           const cleaned = cleanScene(deepCopy(s), allWarnings);
@@ -870,7 +962,7 @@
         if (round === MAX_FIX_ROUND) break;
         log('校验发现 ' + errors.length + ' 个错误，交给 AI 修复（第 ' + (round + 1) + '/' + MAX_FIX_ROUND + ' 轮）…', 'an-warn');
         errors.slice(0, 8).forEach(e => log('  · ' + e, 'an-warn'));
-        const fixed = await chatJson(cfg.key, buildFixPrompt(errors, scriptJson.scenes), streamPreview, signal);
+        const fixed = await chatJson(cfg.api, buildFixPrompt(errors, scriptJson.scenes), streamPreview, signal);
         const fixedScenes = fixed.scenes || [];
         if (fixedScenes.length) {
           const rebuilt = [];

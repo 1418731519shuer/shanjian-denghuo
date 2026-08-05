@@ -3,8 +3,12 @@
 """本地一键自主小说管线 (workflow C1)
 
 一条命令从题材到可发布游戏：
-  ① 复用 wenyou/script_gen.py 生成剧本 JSON（API key 来源与其一致：
-     STEP_API_KEY 环境变量或 E:/user/content_factory/secrets/step_api_key.txt）
+  ① 剧本生成支持多家 OpenAI 兼容服务商（--provider，默认 glm 智谱免费模型）：
+     step 走既有 step_plan_client 私有客户端（STEP_API_KEY 环境变量或
+     E:/user/content_factory/secrets/step_api_key.txt），其它服务商用 urllib
+     直调 OpenAI 兼容接口；key 读取顺序：--key > 按服务商的环境变量
+     （ZHIPU_API_KEY/STEP_API_KEY/DEEPSEEK_API_KEY/MOONSHOT_API_KEY）
+     > 既有 step key 文件兜底
   ② 素材策略：
      --reuse-assets（默认）从 demo_gl/assets 现有背景/立绘库按氛围关键词
        智能匹配，把剧本里的资源路径重写到现有文件，零成本即时可玩；
@@ -16,6 +20,9 @@
 
 用法（从 demo_gl 运行）：
   python tools/autonovel.py "修仙山门悬案"
+  python tools/autonovel.py "修仙山门悬案" --provider deepseek
+  python tools/autonovel.py "修仙山门悬案" --provider custom \
+      --base-url https://example.com/v1/chat/completions --model my-model --key xxx
   python tools/autonovel.py "修仙山门悬案" --chars "苏璃:活泼师妹;陈默:沉稳师兄" --scenes 5
   python tools/autonovel.py "修仙山门悬案" --gen-assets     # 出新图（调 API）
   python tools/autonovel.py "修仙山门悬案" --dry-run        # 预览，不调 API 不写盘
@@ -43,6 +50,21 @@ OUT_ROOT = os.path.join(DEMO_ROOT, 'games_output')
 IMG_RULES = {'bg': (1920, 80), 'cg': (1920, 85), 'chars': (1024, 85)}
 IMG_EXTS = ('.png', '.jpg', '.jpeg')
 AUDIO_EXTS = ('.mp3', '.wav', '.ogg', '.m4a')
+
+# 服务商预设（OpenAI 兼容接口），与 demo_gl/ai_gen.js 的 PROVIDERS 保持一致
+# env 为该服务商 key 对应的环境变量名；max_tokens 缺省用 script_gen.MAX_TOKENS
+PROVIDERS = {
+    'glm':      {'url': 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+                 'model': 'glm-4-flash', 'env': 'ZHIPU_API_KEY', 'max_tokens': 4095},
+    'step':     {'url': 'https://api.stepfun.com/v1/chat/completions',
+                 'model': 'step-3.7-flash', 'env': 'STEP_API_KEY'},
+    'deepseek': {'url': 'https://api.deepseek.com/v1/chat/completions',
+                 'model': 'deepseek-chat', 'env': 'DEEPSEEK_API_KEY'},
+    'moonshot': {'url': 'https://api.moonshot.cn/v1/chat/completions',
+                 'model': 'moonshot-v1-8k', 'env': 'MOONSHOT_API_KEY'},
+    'custom':   {'url': '', 'model': '', 'env': None},
+}
+STEP_KEY_FILE = 'E:/user/content_factory/secrets/step_api_key.txt'  # 既有 key 文件（兜底）
 
 # 中文氛围词 -> 英文文件名 token（用于把 LLM 编的背景名匹配到现有素材库）
 MOOD_TOKENS = {
@@ -322,10 +344,92 @@ def validate_script(script):
 
 # ---------------------------------------------------------------- 剧本生成（复用 script_gen 管线）
 
-def auto_chars(theme):
+def resolve_provider(args):
+    """按 --provider/--base-url/--model/--key 解析出服务商配置 {url, model, key, ...}。
+    key 读取顺序：命令行 > 按服务商的环境变量 > 既有 step key 文件兜底。"""
+    p = dict(PROVIDERS[args.provider])
+    p['provider'] = args.provider
+    if args.base_url:
+        p['url'] = args.base_url
+    if args.model:
+        p['model'] = args.model
+    if not p['url'] or not p['model']:
+        sys.exit('[错误] --provider custom 需要同时提供 --base-url 和 --model')
+    key = args.key or (os.environ.get(p['env']) if p['env'] else None)
+    if not key and os.path.exists(STEP_KEY_FILE):
+        key = open(STEP_KEY_FILE, encoding='utf-8').read().strip()
+    if not key:
+        env_hint = f'或设置环境变量 {p["env"]} ' if p['env'] else ''
+        sys.exit(f'[错误] 未找到 API key：请用 --key 传入{env_hint}（{args.provider} 服务商）')
+    p['key'] = key
+    return p
+
+
+def chat_openai_compat(url, model, key, messages, max_tokens):
+    """urllib 直调 OpenAI 兼容 chat/completions（非流式）。返回文本。"""
+    import urllib.error
+    import urllib.request
+    body = json.dumps({'model': model, 'messages': messages,
+                       'max_tokens': max_tokens}).encode('utf-8')
+    req = urllib.request.Request(url, data=body, headers={
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + key,
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode('utf-8', 'ignore')[:200]
+        if e.code == 402:
+            raise RuntimeError('[错误] 账户额度不足（HTTP 402），请充值或换一家服务商（--provider）')
+        if e.code in (401, 403):
+            raise RuntimeError(f'[错误] API Key 无效或已过期（HTTP {e.code}）')
+        raise RuntimeError(f'[错误] API 请求失败（HTTP {e.code}）：{detail}')
+    choices = data.get('choices') or []
+    if not choices:
+        return ''
+    return (choices[0].get('message') or {}).get('content') or ''
+
+
+def make_chat_json(provider):
+    """非 step 服务商：用 urllib 实现 script_gen.chat_json 等价功能
+    （同样的重试 3 次、正则抽 JSON、把解析错误喂回模型修复）。"""
+    sg = _import_script_gen()
+
+    def chat_json(user_prompt, parse_retries=sg.MAX_PARSE_RETRY):
+        messages = [{'role': 'system', 'content': sg.SYSTEM_JSON},
+                    {'role': 'user', 'content': user_prompt}]
+        last_err = ''
+        for _ in range(parse_retries):
+            text = chat_openai_compat(provider['url'], provider['model'], provider['key'],
+                                      messages, provider.get('max_tokens') or sg.MAX_TOKENS)
+            if not text or not text.strip():
+                last_err = '空返回'
+                continue
+            m = re.search(r'\{.*\}', text, re.S)
+            if not m:
+                last_err = '返回中没有 JSON 对象'
+                continue
+            try:
+                return json.loads(m.group(0))
+            except json.JSONDecodeError as e:
+                last_err = f'JSON 解析失败: {e}'
+                messages = messages + [
+                    {'role': 'assistant', 'content': text},
+                    {'role': 'user', 'content':
+                        f'上一个输出不是合法 JSON（{e}）。请修复后重新只输出 JSON，'
+                        '不要 markdown，不要解释。'},
+                ]
+        raise RuntimeError(f'JSON 生成重试 {parse_retries} 次仍失败：{last_err}')
+
+    return chat_json
+
+
+def auto_chars(theme, chat_json=None):
     """未给 --chars 时，先让 LLM 按题材拟 2-3 张人物卡。"""
     sg = _import_script_gen()
-    data = sg.chat_json(
+    chat = chat_json or sg.chat_json
+    data = chat(
         f"题材：{theme}\n请为这部文游设计 2-3 位主要角色，"
         '输出 JSON：{"chars": [{"name": "姓名", "desc": "一句话人设"}]}。'
         "姓名与人设都要贴合题材。")
@@ -335,8 +439,80 @@ def auto_chars(theme):
     return ";".join(f"{c['name']}:{c.get('desc', '')}" for c in chars)
 
 
-def gen_script_via_api(theme, chars, n_scenes):
-    """子进程调 script_gen.py 跑完整生成管线（大纲→逐幕→校验修复）。"""
+def gen_script_local(theme, chars, n_scenes, chat_json):
+    """进程内跑生成管线（大纲→逐幕→校验修复，逻辑同 script_gen.main），
+    chat_json 可替换以支持多家服务商。"""
+    sg = _import_script_gen()
+    if not chars:
+        print("[0/4] 未指定 --chars，先让 AI 拟人物卡 ...")
+        chars = auto_chars(theme, chat_json)
+        print(f"  人物卡：{chars}")
+    characters, cards = sg.parse_chars(chars)
+
+    print("[1/4] 生成分幕大纲 ...")
+    outline = chat_json(sg.build_outline_prompt(theme, cards, n_scenes))
+    acts = outline.get('acts') or []
+    if not acts:
+        sys.exit("[错误] 大纲为空")
+    print(f"  大纲 {len(acts)} 幕：{[a.get('title', a.get('id')) for a in acts]}")
+
+    print("      逐幕生成 scene ...")
+    all_scenes, all_warnings = [], []
+    for act in acts:
+        data = chat_json(sg.build_scene_prompt(theme, cards, act, n_scenes))
+        scenes = data.get('scenes') or ([data] if data.get('id') else [])
+        for s in scenes:
+            cleaned, ok = sg.clean_scene(s, all_warnings)
+            if ok:
+                all_scenes.append(cleaned)
+        print(f"  幕 {act.get('id')}: +{len(scenes)} scene")
+    script_json = sg.assemble(theme, characters, all_scenes)
+
+    conn_warnings = []
+    errors = []
+    for round_ in range(2):
+        errors = sg.check_char_refs(script_json)
+        conn_errors, conn_warnings = sg.check_connectivity(script_json)
+        errors += conn_errors
+        if not errors:
+            break
+        if round_ == 0:
+            print(f"  校验发现 {len(errors)} 个错误，交给 LLM 修复一轮 ...")
+            fix_prompt = (
+                "下面这部文游剧本的 scenes 校验发现这些错误：\n"
+                + "\n".join(f"- {e}" for e in errors)
+                + "\n\n请修复后输出完整的 scenes JSON：{\"scenes\": [...]}。"
+                "只改必须改的地方，保持 scene id 与剧情不变；"
+                "所有 goto/target 必须指向存在的 scene id；"
+                "至少有一个 scene 的 script 以 end 指令收尾。"
+                "\n\n当前 scenes：\n"
+                + json.dumps(script_json["scenes"], ensure_ascii=False)
+            )
+            fixed = chat_json(fix_prompt)
+            fixed_scenes = fixed.get('scenes') or []
+            if fixed_scenes:
+                all_scenes = []
+                for s in fixed_scenes:
+                    cleaned, ok = sg.clean_scene(s, all_warnings)
+                    if ok:
+                        all_scenes.append(cleaned)
+                script_json = sg.assemble(theme, characters, all_scenes)
+    for w in all_warnings + conn_warnings:
+        print(f"  [告警] {w}")
+    if errors:
+        for e in errors:
+            print(f"  [错误] {e}")
+        sys.exit("[失败] 校验未通过，请调整参数重试或人工修复")
+    print("  校验通过")
+    return script_json, chars
+
+
+def gen_script_via_api(theme, chars, n_scenes, provider=None):
+    """生成剧本：step 走子进程 script_gen.py（既有私有客户端），
+    其它服务商进程内跑管线 + urllib 直调 OpenAI 兼容接口。"""
+    if provider and provider.get('provider') != 'step':
+        print(f"[1/4] 生成剧本（{provider['provider']} / {provider['model']}）...")
+        return gen_script_local(theme, chars, n_scenes, make_chat_json(provider))
     if not chars:
         print("[0/4] 未指定 --chars，先让 AI 拟人物卡 ...")
         chars = auto_chars(theme)
@@ -508,8 +684,10 @@ def self_test():
     for sub in refs:
         for rel in refs[sub]:
             assert os.path.exists(os.path.join(SRC_ASSETS, rel)), f"重写后仍指向缺失文件 {rel}"
-    assert not refs['bgm'] and not refs['sfx'], "无音频库时应剥除 bgm/sfx"
-    print(f"  素材重写 OK（{n} 处），全部引用落在现有文件上")
+    if not pool['bgm'] and not pool['sfx']:
+        assert not refs['bgm'] and not refs['sfx'], "无音频库时应剥除 bgm/sfx"
+    print(f"  素材重写 OK（{n} 处），全部引用落在现有文件上"
+          f"（音频库 bgm {len(pool['bgm'])} / sfx {len(pool['sfx'])}）")
 
     # 4) 校验：假剧本零错误；再构造悬空 goto 必须被检出
     errors, warns = validate_script(script)
@@ -543,6 +721,29 @@ def self_test():
     # 6) slugify
     assert slugify('修仙 山门/悬案?') == '修仙_山门_悬案'
     print("  slugify OK")
+
+    # 7) 多服务商 chat_json：伪造底层 chat 第一次坏 JSON、第二次好 JSON
+    global chat_openai_compat
+    orig_chat = chat_openai_compat
+    outputs = iter(['这是坏 JSON {not valid', '前缀废话 {"ok": 1} 后缀'])
+    chat_openai_compat = lambda *a, **kw: next(outputs)
+    try:
+        result = make_chat_json({'url': 'x', 'model': 'y', 'key': 'z'})('任意')
+        assert result == {'ok': 1}, result
+    finally:
+        chat_openai_compat = orig_chat
+    print("  多服务商 chat_json（坏 JSON retry + 正则抽取修复）OK")
+
+    # 8) resolve_provider：命令行 key 优先，预设 url/model 生效
+    class _A:
+        provider = 'glm'
+        base_url = None
+        model = None
+        key = 'cli-key'
+    p = resolve_provider(_A())
+    assert p['key'] == 'cli-key' and p['model'] == 'glm-4-flash' \
+        and p['url'] == PROVIDERS['glm']['url'], p
+    print("  resolve_provider（--key 优先 + glm 预设）OK")
     print("== self-test 全部通过 ==")
 
 
@@ -553,6 +754,11 @@ def main():
     ap.add_argument("theme", nargs="?", help="一句话题材，如：修仙山门悬案")
     ap.add_argument("--chars", help='人物卡："名字:描述;名字:描述"（缺省让 AI 拟）')
     ap.add_argument("--scenes", type=int, default=5, help="目标场景数（默认 5）")
+    ap.add_argument("--provider", choices=sorted(PROVIDERS), default='glm',
+                    help="API 服务商（默认 glm 智谱，glm-4-flash 免费；step 走既有私有客户端）")
+    ap.add_argument("--base-url", help="覆盖服务商接口地址（custom 必填）")
+    ap.add_argument("--model", help="覆盖模型名（custom 必填）")
+    ap.add_argument("--key", help="API key（缺省读按服务商的环境变量，最后兜底既有 step key 文件）")
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--reuse-assets", action="store_true",
                       help="复用现有素材库智能匹配（默认，零成本）")
@@ -571,12 +777,18 @@ def main():
     # --dry-run：用假剧本演示匹配与校验，不写任何文件
     if args.dry_run:
         print("== dry-run 预览（不调 API，不写盘）==")
+        p = PROVIDERS[args.provider]
         print(f"题材：{args.theme or '(未提供)'}  场景数：{args.scenes}  "
               f"素材策略：{'gen-assets' if args.gen_assets else 'reuse-assets（默认）'}")
+        print(f"服务商：{args.provider}（{args.base_url or p['url']}，"
+              f"model {args.model or p['model']}）")
         out_dir = args.out_dir or os.path.join(OUT_ROOT, slugify(args.theme or 'untitled'))
         print(f"预计输出目录：{out_dir}")
         print("\n正式运行时将执行：")
-        print("  [1/4] python script_gen.py 生成剧本（大纲→逐幕→校验修复）")
+        if args.provider == 'step':
+            print("  [1/4] python script_gen.py 生成剧本（大纲→逐幕→校验修复，私有客户端）")
+        else:
+            print(f"  [1/4] 生成剧本（大纲→逐幕→校验修复，urllib 直调 {args.provider} 接口）")
         if args.gen_assets:
             print("  [2/4] python assets_gen.py 按剧本生成素材")
         else:
@@ -600,8 +812,9 @@ def main():
 
     out_dir = args.out_dir or os.path.join(OUT_ROOT, slugify(args.theme))
 
-    # ① 生成剧本
-    script, chars = gen_script_via_api(args.theme, args.chars, args.scenes)
+    # ① 生成剧本（step 无需在这里解析 key，由 script_gen.py 自己读）
+    provider = resolve_provider(args) if args.provider != 'step' else None
+    script, chars = gen_script_via_api(args.theme, args.chars, args.scenes, provider)
     print(f"  剧本《{script.get('meta', {}).get('title')}》："
           f"{len(script.get('scenes', []))} 个 scene")
 
