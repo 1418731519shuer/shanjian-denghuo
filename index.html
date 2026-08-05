@@ -10,6 +10,8 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
+<!-- 标题页首背景（与 refreshTitle 选用的首个场景背景一致），提前并行下载 -->
+<link rel="preload" as="image" href="assets/bg/ferry_night.jpg">
 <title>她的山间灯火</title>
 <script>
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
@@ -429,12 +431,12 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
 </div>
 
 <div id="viewlayer" class="overlay hidden">
-  <img id="view-img" class="hidden" alt="">
+  <img id="view-img" class="hidden" alt="" decoding="async">
   <div id="view-text"></div>
   <button class="btn">关闭</button>
 </div>
 
-<div id="cglayer" class="overlay hidden"><img id="cg-img" alt=""></div>
+<div id="cglayer" class="overlay hidden"><img id="cg-img" alt="" decoding="async"></div>
 
 <!-- 场景转场黑场层 -->
 <div id="transition-layer"></div>
@@ -458,7 +460,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
 </div>
 
 <!-- CG 大图查看 -->
-<div id="cg-viewer" class="overlay hidden"><img id="cg-viewer-img" alt=""></div>
+<div id="cg-viewer" class="overlay hidden"><img id="cg-viewer-img" alt="" decoding="async"></div>
 
 <!-- 游戏内系统菜单 -->
 <div id="sys-menu" class="overlay hidden">
@@ -739,7 +741,10 @@ function startBgm(bgm) {
   clearInterval(bgmPoll); bgmPoll = null;
   const cfg = (bgm && typeof bgm === 'object') ? bgm : { src: bgm, loop: true };
   if (!cfg.src || cfg.src === 'none' || !audioUnlocked) return;
+  /* 懒加载：Audio 元素只在进入场景真正要播时才创建（首屏不会拉取任何 mp3），
+     创建即播放，显式 preload=auto 让浏览器立刻开始缓冲 */
   const a = new Audio(assetUrl(cfg.src));
+  a.preload = 'auto';
   const target = settings.bgm * (cfg.volume !== undefined ? cfg.volume : 1);
   const start = cfg.start || 0;
   const fi = cfg.fade_in !== undefined ? cfg.fade_in : 1;
@@ -870,6 +875,7 @@ function renderSlot(pos, enterEffect, isEnter) {
   let node;
   if (p) {
     node = document.createElement('img');
+    node.decoding = 'async';
     node.onerror = () => { node.replaceWith(makeSilhouette()); };
     node.src = assetUrl(p);
   } else {
@@ -891,7 +897,7 @@ function renderFreeChar(c, enterEffect, isEnter) {
   wrap.style.transform = 'translate(-50%,-100%) scale(' + (c.scale !== undefined ? c.scale : 1) + ')';
   const p = spritePath(c.id, c.sprite);
   let node;
-  if (p) { node = document.createElement('img'); node.onerror = () => { node.replaceWith(makeSilhouette()); }; node.src = assetUrl(p); }
+  if (p) { node = document.createElement('img'); node.decoding = 'async'; node.onerror = () => { node.replaceWith(makeSilhouette()); }; node.src = assetUrl(p); }
   else { node = makeSilhouette(); }
   wrap.appendChild(node);
   if (isEnter && enterEffect === 'slide') wrap.classList.add(c.x < 0.5 ? 'enter-slide-l' : 'enter-slide-r');
@@ -937,9 +943,59 @@ function highlightSpeaker(who) {
   freeChars.forEach(c => { const el = freeCharEl(c.id); if (el) el.classList.toggle('speaking', c.id === who); });
 }
 
+/* ================= 场景素材预加载 ================= */
+/* 进入场景后在空闲时段预取「可能的下一场景」的背景与立绘，场景切换瞬时完成 */
+const preloadedAssets = new Set();
+function preloadImage(path) {
+  if (!path || path === 'none' || /\.(mp4|webm)$/i.test(path)) return;
+  const url = assetUrl(path);
+  if (preloadedAssets.has(url)) return;
+  preloadedAssets.add(url);
+  const img = new Image();
+  img.decoding = 'async';
+  img.src = url;
+  if (img.decode) img.decode().catch(() => {});
+}
+function collectSceneAssets(sc) {
+  const paths = [];
+  if (sc.background && sc.background !== 'none') paths.push(sc.background);
+  (sc.chars || []).forEach(c => { const p = spritePath(c.id, c.sprite || 'normal'); if (p) paths.push(p); });
+  return paths;
+}
+/* 从场景顺序与 goto/choice/require_else 目标推断后续场景 */
+function nextSceneCandidates(idx) {
+  const out = [];
+  const add = id => { const i = script.scenes.findIndex(s => s.id === id); if (i >= 0 && !out.includes(i)) out.push(i); };
+  const sc = script.scenes[idx];
+  (sc.script || []).forEach(cmd => {
+    if (cmd.type === 'goto') {
+      if (cmd.target) add(cmd.target);
+      (cmd.branches || []).forEach(b => { if (b.target) add(b.target); });
+      if (cmd.else_target) add(cmd.else_target);
+    }
+    if (cmd.type === 'choice') (cmd.options || []).forEach(o => { if (o.goto) add(o.goto); });
+  });
+  if (sc.require_else) add(sc.require_else);
+  if (idx + 1 < script.scenes.length) out.push(idx + 1);
+  return out;
+}
+function scheduleScenePreload(idx) {
+  if (!script || !script.scenes[idx]) return;
+  const idle = window.requestIdleCallback || (cb => setTimeout(cb, 300));
+  idle(() => {
+    if (!script) return;
+    nextSceneCandidates(idx).forEach(i => collectSceneAssets(script.scenes[i]).forEach(preloadImage));
+  });
+}
+
 /* ================= 打字机与文本 ================= */
+/* rAF 驱动 + 按帧批量补字：高速档一帧补多字只触发一次 textContent 更新，
+   避免旧实现 setInterval 每字一次 DOM 写入造成的重复重排 */
+function stopTyping() {
+  if (typing) { cancelAnimationFrame(typing.raf); typing = null; }
+}
 function showText(text, who, narrate) {
-  clearInterval(typing); typing = null;
+  stopTyping();
   clearTimeout(autoTimer);
   const full = interp(text);
   $('namebox').classList.toggle('hidden', !!narrate);
@@ -953,17 +1009,21 @@ function showText(text, who, narrate) {
   $('advance-hint').style.visibility = 'hidden';
   const speed = ffMode ? 0 : settings.speed;
   if (speed <= 0) { dt.textContent = full; onTextDone(); return; }
-  let i = 0;
-  typing = setInterval(() => {
-    dt.textContent = full.slice(0, ++i);
-    if (i >= full.length) { clearInterval(typing); typing = null; onTextDone(); }
-  }, speed);
-  typing._full = full;
+  typing = { full, shown: 0, t0: 0, raf: 0 };
+  const step = ts => {
+    if (!typing) return;
+    if (!typing.t0) typing.t0 = ts;
+    const n = Math.min(full.length, Math.floor((ts - typing.t0) / speed));
+    if (n > typing.shown) { typing.shown = n; dt.textContent = full.slice(0, n); }
+    if (n >= full.length) { typing = null; onTextDone(); return; }
+    typing.raf = requestAnimationFrame(step);
+  };
+  typing.raf = requestAnimationFrame(step);
 }
 function completeText() {
   if (!typing) return false;
-  clearInterval(typing);
-  $('dlgtext').textContent = typing._full;
+  cancelAnimationFrame(typing.raf);
+  $('dlgtext').textContent = typing.full;
   typing = null; onTextDone();
   return true;
 }
@@ -1120,6 +1180,7 @@ function enterScene(idx, _guard) {
   if (sc.sfx) playSfx(sc.sfx);
   if (sc.chars !== undefined) updateChars(sc.chars);
   if (sc.checkpoint) saveSlot('checkpoint', true);
+  scheduleScenePreload(idx);
   run();
 }
 
@@ -1420,6 +1481,7 @@ function renderEditorChars() {
     const p = spritePath(c.id, c.sprite);
     if (p) {
       const img=document.createElement('img');
+      img.decoding = 'async';
       const fullUrl = assetUrl(p);
       img.src = fullUrl;
       img.alt = c.id + ':' + c.sprite;
@@ -1520,6 +1582,21 @@ function renderTimeline(sc) {
   const charContainer = $('tl-chars-container');
   if (charContainer) {
     charContainer.innerHTML = '';
+    /* 事件委托：整片矩阵格（可达数百个）共用容器上一个监听器，避免逐格绑定 */
+    if (!charContainer._delegated) {
+      charContainer._delegated = true;
+      charContainer.onclick = ev => {
+        const cell = ev.target.closest('.tl-block[data-cid]');
+        if (!cell) return;
+        const sc2 = script.scenes[edSceneIdx];
+        if (!sc2 || !sc2._charMatrix || !sc2._charMatrix[cell.dataset.cid]) return;
+        ev.stopPropagation();
+        const cid = cell.dataset.cid, ix = +cell.dataset.idx;
+        sc2._charMatrix[cid][ix] = ((sc2._charMatrix[cid][ix] ?? 0) + 1) % 3;
+        edActiveChar = cid;
+        renderTimeline(sc2);
+      };
+    }
     const cellW = Math.max(4, (100/total));
     (sc.chars||[]).forEach(function(c) {
       const row = document.createElement('div'); row.className = 'tl-char-row';
@@ -1537,12 +1614,7 @@ function renderTimeline(sc) {
         cell.textContent = isSpeaking ? '💬' : (state===2?'●':state===1?'○':'·');
         cell.title = (script.characters[c.id]||{}).name+' 第'+idx+'条 | '+(['不出现','暗色','出现'][state])+' | 点击切换';
         cell.style.cursor = 'pointer';
-        cell.onclick = (function(cid, ix) { return function(ev) {
-          ev.stopPropagation();
-          sc._charMatrix[cid][ix] = ((sc._charMatrix[cid]?.[ix] ?? 0) + 1) % 3;
-          edActiveChar = cid;
-          renderTimeline(sc);
-        };})(c.id, idx);
+        cell.dataset.cid = c.id; cell.dataset.idx = idx;
         blocks.appendChild(cell);
       }
       charContainer.appendChild(row);
@@ -2478,7 +2550,7 @@ function bindUI() {
   $('dlg').addEventListener('touchstart', ffStart, { passive:true });
   const ffEnd = () => { if (ffMode) { ffMode = false; clearTimeout(autoTimer); } };
   document.addEventListener('mouseup', ffEnd);
-  document.addEventListener('touchend', ffEnd);
+  document.addEventListener('touchend', ffEnd, { passive:true });
   $('mb-hist').onclick = openHistory;
   $('mb-save').onclick = () => { renderSavePanel(true); $('save-panel-title').textContent = '存档'; $('save-panel').classList.remove('hidden'); };
   $('mb-load').onclick = () => { renderSavePanel(false); $('save-panel-title').textContent = '读档'; $('save-panel').classList.remove('hidden'); };
@@ -2631,8 +2703,8 @@ const TitleFx = {
     for (let i = 0; i < 6; i++) this.parts.push(this.lantern(true));
     const loop = () => {
       requestAnimationFrame(loop);
-      /* 标题页隐藏时不绘制，省电 */
-      if ($('title-screen').classList.contains('hidden')) return;
+      /* 标题页隐藏或页面不可见时不绘制，省电 */
+      if (document.hidden || $('title-screen').classList.contains('hidden')) return;
       this.step();
     };
     loop();
@@ -2685,6 +2757,6 @@ loadScript(EMBEDDED_SCRIPT);
 TitleFx.init();
 document.addEventListener('click', unlockAudio, { once:false });
 </script>
-<script src="ai_gen.js"></script>
+<script src="ai_gen.js" defer></script>
 </body>
 </html>

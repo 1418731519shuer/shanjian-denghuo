@@ -108,6 +108,17 @@ self.addEventListener('activate', e => {{
 }});
 self.addEventListener('fetch', e => {{
   if (e.request.method !== 'GET') return;
+  /* 导航请求（index.html）：网络优先、失败回退缓存 —— 保证新版本能及时生效 */
+  if (e.request.mode === 'navigate') {{
+    e.respondWith(fetch(e.request).then(resp => {{
+      const copy = resp.clone();
+      caches.open(CACHE).then(c => c.put(e.request, copy));
+      return resp;
+    }}).catch(() => caches.match(e.request, {{ ignoreSearch: true }})
+      .then(r => r || caches.match('./index.html'))));
+    return;
+  }}
+  /* 静态资源：缓存优先，回源后写入缓存 */
   e.respondWith(caches.match(e.request, {{ ignoreSearch: true }}).then(r => r ||
     fetch(e.request).then(resp => {{
       const copy = resp.clone();
