@@ -45,12 +45,16 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
 @keyframes slideL { from{transform:translateX(-60vw);opacity:0} to{transform:none;opacity:1} }
 @keyframes slideR { from{transform:translateX(60vw);opacity:0} to{transform:none;opacity:1} }
 
-#dlg { position:absolute; left:0; right:0; bottom:0; height:28vh; min-height:120px;
-  background:rgba(10,12,20,.78); border-top:1px solid rgba(255,255,255,.15);
-  padding:2.2vh 4vw; cursor:pointer; z-index:10; }
-#namebox { position:absolute; top:-1.2em; left:4vw; padding:.15em .9em;
-  background:rgba(10,12,20,.9); border:1px solid rgba(255,255,255,.25);
-  border-radius:.4em; font-weight:bold; font-size:clamp(14px,2.2vw,22px); }
+/* 橙光式对话框：半透明渐变、无边框、safe-area 适配 */
+#dlg { position:absolute; left:0; right:0; bottom:0; height:30vh; min-height:130px;
+  background:linear-gradient(to top, rgba(6,8,14,.95) 0%, rgba(8,11,20,.82) 45%, rgba(8,11,20,.45) 75%, transparent 100%);
+  padding:3vh 5vw calc(2.2vh + env(safe-area-inset-bottom, 0px)); cursor:pointer; z-index:10; }
+/* 悬浮名字框 */
+#namebox { position:absolute; top:-1.3em; left:6vw; padding:.28em 1.3em;
+  background:linear-gradient(135deg, rgba(52,38,58,.92), rgba(22,26,44,.92));
+  border:1px solid rgba(255,215,150,.35); border-radius:2em;
+  box-shadow:0 3px 14px rgba(0,0,0,.55), 0 0 12px rgba(255,215,150,.18);
+  font-weight:bold; font-size:clamp(14px,2.2vw,22px); letter-spacing:.08em; }
 #dlgtext { font-size:clamp(15px,2.4vw,24px); line-height:1.7; white-space:pre-wrap; }
 #dlgtext.narrate { font-style:italic; color:#cfd6e4; }
 #advance-hint { position:absolute; right:2vw; bottom:1vh; font-size:.9em; opacity:.6; animation:blink 1s infinite; }
@@ -58,12 +62,26 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
 #voice-indicator { position:absolute; right:2vw; top:-1.5em; font-size:.8em; opacity:.7; color:#ffd75e; display:none; }
 #voice-indicator.playing { display:block; animation:blink .8s infinite; }
 
-#choices { position:absolute; left:0; right:0; bottom:32vh; display:flex; flex-direction:column;
-  align-items:center; gap:1.2vh; z-index:11; }
-.choice-btn { min-width:min(60vw,480px); padding:.8em 1.5em; font-size:clamp(15px,2.2vw,22px);
-  background:rgba(20,28,45,.92); color:#fff; border:1px solid #7fa0d0; border-radius:.5em; cursor:pointer; }
-.choice-btn:hover { background:rgba(40,60,95,.95); }
-.choice-btn.disabled { opacity:.35; cursor:not-allowed; border-color:#666; }
+#choices { position:absolute; left:0; right:0; bottom:34vh; display:flex; flex-direction:column;
+  align-items:center; gap:1.4vh; z-index:11; padding:0 4vw; }
+/* 选项：居中卡片式，带渐入动画与 hover 反馈 */
+.choice-btn { min-width:min(60vw,480px); max-width:92vw; padding:.8em 1.6em; font-size:clamp(15px,2.2vw,22px);
+  background:linear-gradient(180deg, rgba(34,40,64,.88), rgba(18,22,38,.88));
+  color:#fff; border:1px solid rgba(180,200,255,.35); border-radius:.8em; cursor:pointer;
+  box-shadow:0 4px 18px rgba(0,0,0,.45);
+  transition:transform .18s, box-shadow .18s, border-color .18s, background .18s;
+  animation:choiceIn .4s both; }
+.choice-btn:nth-child(2) { animation-delay:.07s; }
+.choice-btn:nth-child(3) { animation-delay:.14s; }
+.choice-btn:nth-child(4) { animation-delay:.21s; }
+.choice-btn:nth-child(5) { animation-delay:.28s; }
+.choice-btn:nth-child(6) { animation-delay:.35s; }
+@keyframes choiceIn { from{opacity:0; transform:translateY(16px)} to{opacity:1; transform:none} }
+.choice-btn:hover { background:linear-gradient(180deg, rgba(52,62,96,.92), rgba(30,36,60,.92));
+  border-color:#a8c4ff; transform:translateY(-2px) scale(1.02);
+  box-shadow:0 6px 22px rgba(0,0,0,.5), 0 0 16px rgba(150,180,255,.35); }
+.choice-btn.disabled { opacity:.35; cursor:not-allowed; border-color:#666; animation:none; }
+.choice-btn.disabled:hover { transform:none; box-shadow:0 4px 18px rgba(0,0,0,.45); }
 
 .hotspot { position:absolute; z-index:9; border:2px solid rgba(255,220,100,.9); border-radius:.4em;
   background:rgba(255,220,100,.12); cursor:pointer; animation:hsGlow 1.2s infinite; }
@@ -86,7 +104,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
 @keyframes cgIn { from{opacity:0; transform:scale(.92)} to{opacity:1; transform:scale(1)} }
 #view-text { max-width:70vw; line-height:1.8; font-size:1.1em; }
 
-#menubar { position:fixed; top:8px; right:8px; z-index:40; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+#menubar { position:fixed; top:calc(8px + env(safe-area-inset-top, 0px)); right:calc(8px + env(safe-area-inset-right, 0px)); z-index:40; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
 #menubar .btn { min-width:44px; min-height:44px; margin:0; padding:.3em .6em; font-size:.85em; }
 
 .slotgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:.6em; }
@@ -98,16 +116,72 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
 .setrow label { min-width:6em; }
 .setrow input[type=range] { flex:1; }
 
-#history-list { max-height:60vh; overflow-y:auto; text-align:left; line-height:1.7; }
+#history-list { flex:1; overflow-y:auto; text-align:left; line-height:1.8; margin:.6em 0; }
 #history-list .h-who { font-weight:bold; margin-right:.5em; }
 #history-list .h-narrate { font-style:italic; color:#aab; }
 
-#title-screen { background:radial-gradient(ellipse at center,#1c2942,#05070d); z-index:60; }
-#title-screen h1 { font-size:clamp(2em,7vw,4em); letter-spacing:.2em; margin-bottom:.2em; }
-#title-screen .author { opacity:.6; margin-bottom:2em; }
-#title-screen .btn { font-size:1.2em; }
-#ending-info { margin-top:1.5em; opacity:.75; }
+/* ========== 标题页（橙光化） ========== */
+#title-screen { background-color:#05070d; background-size:cover; background-position:center; z-index:60; }
+#title-particles { position:absolute; inset:0; width:100%; height:100%; z-index:0; pointer-events:none; }
+#title-main { position:relative; z-index:1; display:flex; flex-direction:column; align-items:center;
+  max-height:100%; overflow-y:auto; padding:4vh 4vw calc(3vh + env(safe-area-inset-bottom, 0px)); }
+#title-screen h1 { font-family:"STKaiti","KaiTi","STSong","SimSun",serif;
+  font-size:clamp(2.4em,9vw,5.2em); letter-spacing:.22em; margin-bottom:.15em; color:#f5e7c8;
+  text-shadow:0 0 22px rgba(255,200,120,.5), 0 0 6px rgba(255,220,160,.35), 0 3px 8px rgba(0,0,0,.85); }
+#title-screen .author { opacity:.65; margin-bottom:1.2em; font-size:.95em; letter-spacing:.1em; }
+/* 竖排按钮组，hover 光晕动画 */
+#title-btns { display:flex; flex-wrap:wrap; justify-content:center; align-items:stretch;
+  gap:clamp(8px,1.8vw,22px); margin:1.5em 0 .5em; }
+.tbtn { writing-mode:vertical-rl; letter-spacing:.4em; padding:1.1em .6em;
+  font-family:"STKaiti","KaiTi","STSong","SimSun",serif; font-size:clamp(15px,2vw,20px);
+  color:#f0e2c6; background:rgba(18,15,26,.58); border:1px solid rgba(255,215,150,.32);
+  border-radius:.55em; cursor:pointer;
+  transition:box-shadow .25s, border-color .25s, transform .25s, color .25s; }
+.tbtn:hover { color:#fff; border-color:#ffd78a; transform:translateY(-4px);
+  box-shadow:0 0 20px rgba(255,205,120,.55), inset 0 0 14px rgba(255,205,120,.22); }
+#ending-info { margin-top:1.2em; opacity:.78; font-size:.9em; }
 #warnings { margin-top:1em; max-width:80vw; color:#e0a050; font-size:.85em; text-align:left; }
+
+/* ========== 对话回看（右侧滑抽屉） ========== */
+#history-panel { flex-direction:row; justify-content:flex-end; align-items:stretch; background:rgba(0,0,0,.45); }
+#history-drawer { width:min(430px,88vw); height:100%; display:flex; flex-direction:column;
+  padding:calc(1.2em + env(safe-area-inset-top, 0px)) calc(1.2em + env(safe-area-inset-right, 0px)) calc(1.2em + env(safe-area-inset-bottom, 0px)) 1.2em;
+  background:linear-gradient(180deg, rgba(16,20,34,.97), rgba(10,13,22,.97));
+  border-left:1px solid rgba(255,215,150,.25); box-shadow:-8px 0 30px rgba(0,0,0,.6);
+  transform:translateX(102%); transition:transform .3s ease; }
+#history-panel.open #history-drawer { transform:none; }
+#history-drawer h2 { margin-bottom:.4em; font-size:1.2em; letter-spacing:.15em; }
+
+/* ========== CG 画廊 / 结局收集 ========== */
+.gallery-panel, .endings-panel { min-width:min(88vw,640px); }
+#gallery-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:.7em; margin:.8em 0; }
+.cg-thumb { aspect-ratio:16/10; background:#0c1120 center/cover; border:1px solid #3a4a63; border-radius:.5em;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  transition:transform .2s, box-shadow .2s; }
+.cg-thumb:hover { transform:scale(1.03); box-shadow:0 0 14px rgba(150,180,255,.35); }
+.cg-thumb.locked { cursor:default; background:#0c1120; color:#3a4a63; font-size:2em; }
+.cg-thumb.locked:hover { transform:none; box-shadow:none; }
+#endings-list { display:flex; flex-direction:column; gap:.5em; margin:.8em 0; }
+.ending-card { padding:.7em 1.1em; border:1px solid rgba(255,215,150,.4); border-radius:.5em;
+  background:linear-gradient(90deg, rgba(60,45,30,.5), rgba(25,22,35,.5)); letter-spacing:.1em; }
+.ending-card.locked { border-style:dashed; border-color:#3a4a63; color:#556; background:none; }
+.empty-state { opacity:.55; padding:2em 0; text-align:center; letter-spacing:.15em; }
+#cg-viewer { z-index:80; background:rgba(0,0,0,.92); }
+#cg-viewer img { max-width:94vw; max-height:90vh; border:1px solid #555; }
+
+/* ========== 游戏内系统菜单 ========== */
+#sys-menu { z-index:58; background:rgba(0,0,0,.55); }
+#sys-menu .panel { min-width:min(84vw,320px); text-align:center;
+  background:linear-gradient(180deg, rgba(22,26,44,.97), rgba(12,15,26,.97));
+  border:1px solid rgba(255,215,150,.3); }
+.sysbtn { display:block; width:100%; margin:.35em 0; padding:.7em 0; font-size:1.05em; letter-spacing:.2em;
+  background:rgba(38,54,82,.6); }
+.sysbtn:hover { background:rgba(51,73,122,.8); box-shadow:0 0 12px rgba(150,180,255,.3); }
+
+/* ========== 场景转场（黑场淡入淡出） ========== */
+#transition-layer { position:fixed; inset:0; background:#000; opacity:0; pointer-events:none; z-index:75; }
+#transition-layer.active { animation:sceneFade .9s ease; }
+@keyframes sceneFade { 0%{opacity:0} 35%{opacity:1} 100%{opacity:0} }
 
 #end-screen { background:#000; z-index:70; transition:opacity 1.5s; }
 #end-label { font-size:clamp(1.6em,5vw,3em); letter-spacing:.15em; margin-bottom:1em; }
@@ -267,6 +341,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
   <button class="btn" id="mb-save" title="存档">存档</button>
   <button class="btn" id="mb-load" title="读档">读档</button>
   <button class="btn" id="mb-set" title="设置">设置</button>
+  <button class="btn" id="mb-menu" title="系统菜单">菜单</button>
   <button class="btn" id="mb-auto" title="自动播放">自动</button>
   <button class="btn" id="mb-skip" title="跳过已读">跳过</button>
   <button class="btn" id="mb-skipall" title="全部跳过">全跳</button>
@@ -274,15 +349,23 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
 </div>
 
 <div id="title-screen" class="overlay">
-  <h1 id="game-title">…</h1>
-  <div class="author" id="game-author"></div>
-  <button class="btn" id="btn-start">开始游戏</button>
-  <button class="btn hidden" id="btn-continue">继续游戏</button>
-  <button class="btn" id="btn-load-script">载入自定义剧本</button>
-  <button class="btn" id="btn-editor">场景编辑器</button>
-  <input type="file" id="script-file" accept=".json" class="hidden">
-  <div id="ending-info"></div>
-  <div id="warnings"></div>
+  <canvas id="title-particles"></canvas>
+  <div id="title-main">
+    <h1 id="game-title">…</h1>
+    <div class="author" id="game-author"></div>
+    <div id="title-btns">
+      <button class="tbtn hidden" id="btn-continue">继续游戏</button>
+      <button class="tbtn" id="btn-start">开始游戏</button>
+      <button class="tbtn" id="btn-gallery">CG画廊</button>
+      <button class="tbtn" id="btn-endings">结局收集</button>
+      <button class="tbtn hidden" id="btn-ai-gen">AI生成</button>
+      <button class="tbtn" id="btn-editor">场景编辑器</button>
+      <button class="tbtn" id="btn-load-script">载入剧本</button>
+    </div>
+    <input type="file" id="script-file" accept=".json" class="hidden">
+    <div id="ending-info"></div>
+    <div id="warnings"></div>
+  </div>
 </div>
 
 <div id="name-input-overlay" class="overlay hidden" style="z-index:65">
@@ -296,10 +379,10 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
 </div>
 
 <div id="history-panel" class="overlay hidden">
-  <div class="panel">
-    <h2>历史回顾</h2>
+  <div id="history-drawer">
+    <h2>对话回看</h2>
     <div id="history-list"></div>
-    <button class="btn" data-close="history-panel">关闭</button>
+    <button class="btn" id="hist-close">关闭</button>
   </div>
 </div>
 
@@ -352,6 +435,43 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
 </div>
 
 <div id="cglayer" class="overlay hidden"><img id="cg-img" alt=""></div>
+
+<!-- 场景转场黑场层 -->
+<div id="transition-layer"></div>
+
+<!-- CG 画廊 -->
+<div id="gallery-screen" class="overlay hidden" style="z-index:65">
+  <div class="panel gallery-panel">
+    <h2>CG 画廊</h2>
+    <div id="gallery-grid"></div>
+    <button class="btn" data-close="gallery-screen">关闭</button>
+  </div>
+</div>
+
+<!-- 结局收集 -->
+<div id="endings-screen" class="overlay hidden" style="z-index:65">
+  <div class="panel endings-panel">
+    <h2>结局收集</h2>
+    <div id="endings-list"></div>
+    <button class="btn" data-close="endings-screen">关闭</button>
+  </div>
+</div>
+
+<!-- CG 大图查看 -->
+<div id="cg-viewer" class="overlay hidden"><img id="cg-viewer-img" alt=""></div>
+
+<!-- 游戏内系统菜单 -->
+<div id="sys-menu" class="overlay hidden">
+  <div class="panel">
+    <h2>菜单</h2>
+    <button class="btn sysbtn" id="sm-save">存档</button>
+    <button class="btn sysbtn" id="sm-load">读档</button>
+    <button class="btn sysbtn" id="sm-set">设置</button>
+    <button class="btn sysbtn" id="sm-hist">回看</button>
+    <button class="btn sysbtn" id="sm-title">回标题</button>
+    <button class="btn sysbtn" id="sm-resume">继续游戏</button>
+  </div>
+</div>
 
 <div id="end-screen" class="overlay hidden">
   <div id="end-label"></div>
@@ -456,6 +576,17 @@ const lsKey = k => 'wenyou_' + (script ? script.meta.title : 'x') + '_' + k;
 const getSeen = () => JSON.parse(localStorage.getItem(lsKey('seen')) || '[]');
 const markSeen = k => { const s = getSeen(); if (!s.includes(k)) { s.push(k); localStorage.setItem(lsKey('seen'), JSON.stringify(s)); } };
 const assetUrl = p => (script.assets_dir || '') + p;
+
+/* 回看记录：最多保留最近 100 条 */
+function pushHistory(item) { history.push(item); if (history.length > 100) history.splice(0, history.length - 100); }
+
+/* CG 解锁记录（localStorage 持久化） */
+const getUnlockedCgs = () => JSON.parse(localStorage.getItem(lsKey('unlocked_cgs')) || '[]');
+function unlockCg(p) {
+  if (!p) return;
+  const l = getUnlockedCgs();
+  if (!l.includes(p)) { l.push(p); localStorage.setItem(lsKey('unlocked_cgs'), JSON.stringify(l)); }
+}
 
 /* ================= if 表达式 ================= */
 function tokenize(src) {
@@ -856,7 +987,7 @@ function run() {
       waiting = 'advance';
       const key = sceneIdx + ':' + lineIdx;
       const wasRead = getSeen().includes(key);
-      history.push({ narrate:true, text:interp(cmd.text) });
+      pushHistory({ narrate:true, text:interp(cmd.text) });
       markSeen(key);
       if (skipMode && !wasRead) stopSkipAuto();
       if (skipAllMode && !cmd.stop_skip) { stopVoice(); lineIdx++; run(); return; }
@@ -875,7 +1006,7 @@ function run() {
       waiting = 'advance';
       const key = sceneIdx + ':' + lineIdx;
       const wasRead = getSeen().includes(key);
-      history.push({ who, text:interp(cmd.text) });
+      pushHistory({ who, text:interp(cmd.text) });
       markSeen(key);
       if (skipMode && !wasRead) stopSkipAuto();
       if (skipAllMode && !cmd.stop_skip) { stopVoice(); lineIdx++; run(); return; }
@@ -939,6 +1070,7 @@ function run() {
       img.style.display = '';
       img.onerror = () => { img.style.display = 'none'; };
       img.src = assetUrl(cmd.image);
+      unlockCg(cmd.image);
       layer.classList.remove('hidden');
       layer.onclick = () => { layer.classList.add('hidden'); waiting = null; lineIdx++; run(); };
       break;
@@ -979,6 +1111,7 @@ function enterScene(idx, _guard) {
     }
     enterScene(idx + 1, (_guard || 0) + 1); return;
   }
+  sceneTransition();
   sceneIdx = idx; lineIdx = 0;
   $('choices').innerHTML = '';
   $('hotspots').innerHTML = '';
@@ -992,7 +1125,7 @@ function enterScene(idx, _guard) {
 
 function openView(show, onClose) {
   const layer = $('viewlayer'), img = $('view-img');
-  if (show.image) { img.classList.remove('hidden'); img.onerror = () => img.classList.add('hidden'); img.src = assetUrl(show.image); }
+  if (show.image) { unlockCg(show.image); img.classList.remove('hidden'); img.onerror = () => img.classList.add('hidden'); img.src = assetUrl(show.image); }
   else img.classList.add('hidden');
   $('view-text').textContent = interp(show.text || '');
   layer.classList.remove('hidden');
@@ -1062,7 +1195,8 @@ function renderAttrPanel() {
   }).join('');
 }
 function closeAllPanels() {
-  ['history-panel','settings-panel','save-panel','viewlayer','cglayer','attr-panel'].forEach(id => $(id).classList.add('hidden'));
+  ['history-panel','settings-panel','save-panel','viewlayer','cglayer','attr-panel','sys-menu','gallery-screen','endings-screen','cg-viewer'].forEach(id => { const el = $(id); if (el) el.classList.add('hidden'); });
+  $('history-panel').classList.remove('open');
 }
 
 /* ================= 校验 ================= */
@@ -1123,6 +1257,12 @@ function refreshTitle() {
   $('game-title').textContent = script.meta.title;
   document.title = script.meta.title;
   $('game-author').textContent = '作者：' + (script.meta.author || '佚名') + '　版本：' + (script.meta.version || '1.0');
+  /* 标题页全屏背景：优先剧本首个有背景的场景，缺省用灯笼铺 */
+  const firstBg = (script.scenes.find(s => s.background && s.background !== 'none') || {}).background || 'bg/lantern_shop.jpg';
+  $('title-screen').style.backgroundImage = 'linear-gradient(rgba(5,7,13,.30), rgba(5,7,13,.82)), url("' + assetUrl(firstBg) + '")';
+  /* AI 生成入口：模块存在才显示 */
+  const aiBtn = $('btn-ai-gen');
+  if (aiBtn) aiBtn.classList.toggle('hidden', !(window.AutoNovel && typeof window.AutoNovel.open === 'function'));
   const ends = JSON.parse(localStorage.getItem(lsKey('endings')) || '[]');
   let total = 0;
   script.scenes.forEach(s => (s.script || []).forEach(c => { if (c.type === 'end') total++; }));
@@ -2209,7 +2349,11 @@ function handleKeyboard(ev) {
   }
   if (ev.key === 'F5') { ev.preventDefault(); saveSlot('quicksave'); }
   if (ev.key === 'F9') { ev.preventDefault(); loadSlot('quicksave'); }
-  if (ev.key === 'Escape') { if (skipAllMode||skipMode||autoMode) stopSkipAuto(); }
+  if (ev.key === 'Escape') {
+    if (skipAllMode||skipMode||autoMode) { stopSkipAuto(); return; }
+    if (!$('sys-menu').classList.contains('hidden')) { $('sys-menu').classList.add('hidden'); return; }
+    if (inGameNow()) openSysMenu();
+  }
 }
 function loadScript(sc) {
   try {
@@ -2225,6 +2369,91 @@ function loadScript(sc) {
     refreshTitle();
   } catch (e) { alert('剧本文件无效：' + e.message); }
 }
+
+/* ================= 橙光化 UI 扩展 ================= */
+/* 场景转场：黑场淡入淡出（非阻塞，不影响执行逻辑） */
+function sceneTransition() {
+  const t = $('transition-layer');
+  if (!t) return;
+  t.classList.remove('active');
+  void t.offsetWidth; /* 强制重排以重启动画 */
+  t.classList.add('active');
+}
+/* 是否处于游戏画面（标题页/编辑器/任何弹窗打开时都不算） */
+function inGameNow() {
+  if ($('title-screen') && !$('title-screen').classList.contains('hidden')) return false;
+  if ($('scene-editor') && !$('scene-editor').classList.contains('hidden')) return false;
+  const ids = ['history-panel','settings-panel','save-panel','viewlayer','cglayer','attr-panel',
+    'sys-menu','gallery-screen','endings-screen','end-screen','name-input-overlay','cg-viewer','attr-editor-overlay'];
+  return ids.every(i => { const el = $(i); return !el || el.classList.contains('hidden'); });
+}
+/* 对话回看（侧滑抽屉） */
+function renderHistory() {
+  $('history-list').innerHTML = history.map(h => h.narrate
+    ? '<div class="h-narrate">' + h.text + '</div>'
+    : '<div><span class="h-who" style="color:' + ((script.characters[h.who] || {}).color || '#fff') + '">' +
+      ((script.characters[h.who] || {}).name || h.who) + '</span>' + h.text + '</div>').join('')
+    || '<div style="opacity:.5;padding:1em 0">暂无回看记录</div>';
+}
+function openHistory() {
+  stopSkipAuto();
+  renderHistory();
+  const p = $('history-panel');
+  p.classList.remove('hidden');
+  /* 等 display 生效后再加 open，触发滑入动画 */
+  requestAnimationFrame(() => requestAnimationFrame(() => p.classList.add('open')));
+}
+function closeHistory() {
+  const p = $('history-panel');
+  p.classList.remove('open');
+  setTimeout(() => p.classList.add('hidden'), 300);
+}
+/* CG 画廊 */
+function collectCgs() {
+  const all = [];
+  script.scenes.forEach(s => (s.script || []).forEach(c => {
+    if (c.type === 'show' && c.image && !all.includes(c.image)) all.push(c.image);
+    if (c.type === 'inspect' && c.show && c.show.image && !all.includes(c.show.image)) all.push(c.show.image);
+  }));
+  return all;
+}
+function renderGallery() {
+  const all = collectCgs(), unlocked = getUnlockedCgs();
+  const grid = $('gallery-grid'); grid.innerHTML = '';
+  if (!all.length) { grid.innerHTML = '<div class="empty-state">本作暂无可收集的 CG</div>'; return; }
+  all.forEach(p => {
+    const un = unlocked.includes(p);
+    const d = document.createElement('div');
+    d.className = 'cg-thumb' + (un ? '' : ' locked');
+    if (un) {
+      d.style.backgroundImage = 'url("' + assetUrl(p) + '")';
+      d.onclick = () => { $('cg-viewer-img').src = assetUrl(p); $('cg-viewer').classList.remove('hidden'); };
+    } else {
+      d.textContent = '?';
+      d.title = '未解锁';
+    }
+    grid.appendChild(d);
+  });
+}
+/* 结局收集 */
+function renderEndings() {
+  const got = JSON.parse(localStorage.getItem(lsKey('endings')) || '[]');
+  const all = [];
+  script.scenes.forEach(s => (s.script || []).forEach(c => {
+    if (c.type === 'end' && c.label && !all.includes(c.label)) all.push(c.label);
+  }));
+  const box = $('endings-list'); box.innerHTML = '';
+  if (!all.length) { box.innerHTML = '<div class="empty-state">本作暂无结局收集</div>'; return; }
+  all.forEach(label => {
+    const un = got.includes(label);
+    const d = document.createElement('div');
+    d.className = 'ending-card' + (un ? '' : ' locked');
+    d.textContent = un ? '🏮 ' + label : '？？？';
+    box.appendChild(d);
+  });
+}
+/* 游戏内系统菜单 */
+function openSysMenu() { $('sys-menu').classList.remove('hidden'); }
 
 /* ================= UI 事件 ================= */
 function bindUI() {
@@ -2250,16 +2479,39 @@ function bindUI() {
   const ffEnd = () => { if (ffMode) { ffMode = false; clearTimeout(autoTimer); } };
   document.addEventListener('mouseup', ffEnd);
   document.addEventListener('touchend', ffEnd);
-  $('mb-hist').onclick = () => {
-    stopSkipAuto();
-    $('history-list').innerHTML = history.map(h => h.narrate
-      ? '<div class="h-narrate">' + h.text + '</div>'
-      : '<div><span class="h-who" style="color:' + ((script.characters[h.who] || {}).color || '#fff') + '">' + ((script.characters[h.who] || {}).name || h.who) + '</span>' + h.text + '</div>').join('');
-    $('history-panel').classList.remove('hidden');
-  };
+  $('mb-hist').onclick = openHistory;
   $('mb-save').onclick = () => { renderSavePanel(true); $('save-panel-title').textContent = '存档'; $('save-panel').classList.remove('hidden'); };
   $('mb-load').onclick = () => { renderSavePanel(false); $('save-panel-title').textContent = '读档'; $('save-panel').classList.remove('hidden'); };
   $('mb-set').onclick = () => $('settings-panel').classList.remove('hidden');
+  /* ---- 橙光化扩展绑定 ---- */
+  $('mb-menu').onclick = () => { stopSkipAuto(); openSysMenu(); };
+  $('hist-close').onclick = closeHistory;
+  $('history-panel').onclick = ev => { if (ev.target === $('history-panel')) closeHistory(); };
+  $('sm-resume').onclick = () => $('sys-menu').classList.add('hidden');
+  $('sm-save').onclick = () => { $('sys-menu').classList.add('hidden'); renderSavePanel(true); $('save-panel-title').textContent = '存档'; $('save-panel').classList.remove('hidden'); };
+  $('sm-load').onclick = () => { $('sys-menu').classList.add('hidden'); renderSavePanel(false); $('save-panel-title').textContent = '读档'; $('save-panel').classList.remove('hidden'); };
+  $('sm-set').onclick = () => { $('sys-menu').classList.add('hidden'); $('settings-panel').classList.remove('hidden'); };
+  $('sm-hist').onclick = () => { $('sys-menu').classList.add('hidden'); openHistory(); };
+  $('sm-title').onclick = () => { $('sys-menu').classList.add('hidden'); backToTitle(); };
+  $('btn-gallery').onclick = () => { renderGallery(); $('gallery-screen').classList.remove('hidden'); };
+  $('btn-endings').onclick = () => { renderEndings(); $('endings-screen').classList.remove('hidden'); };
+  /* AI 生成入口：模块由独立文件提供，不存在则按钮保持隐藏 */
+  $('btn-ai-gen').onclick = () => { if (window.AutoNovel && typeof window.AutoNovel.open === 'function') window.AutoNovel.open(); };
+  $('cg-viewer').onclick = () => $('cg-viewer').classList.add('hidden');
+  /* 移动端手势：上滑开回看、下滑开菜单 */
+  let gTouchY = null, gTouchX = null;
+  $('stage').addEventListener('touchstart', ev => {
+    if (ev.touches.length === 1) { gTouchY = ev.touches[0].clientY; gTouchX = ev.touches[0].clientX; }
+  }, { passive:true });
+  $('stage').addEventListener('touchend', ev => {
+    if (gTouchY === null) return;
+    const dy = ev.changedTouches[0].clientY - gTouchY;
+    const dx = ev.changedTouches[0].clientX - gTouchX;
+    gTouchY = null;
+    if (Math.abs(dy) < 70 || Math.abs(dy) < Math.abs(dx) * 1.2) return;
+    if (!inGameNow()) return;
+    if (dy < 0) openHistory(); else { stopSkipAuto(); openSysMenu(); }
+  }, { passive:true });
   $('mb-attrs').onclick = () => { renderAttrPanel(); $('attr-panel').classList.remove('hidden'); };
   $('mb-auto').onclick = () => {
     autoMode = !autoMode; skipMode = false; skipAllMode = false;
@@ -2366,11 +2618,73 @@ function restoreSettings() {
   $('set-autodelay').value = settings.auto_delay; $('autodelay-label').textContent = (settings.auto_delay/1000).toFixed(1)+'s';
 }
 
+/* ================= 标题页粒子（花瓣/灯笼，纯手写 canvas，无依赖） ================= */
+const TitleFx = {
+  cv:null, ctx:null, parts:[], W:0, H:0,
+  init() {
+    this.cv = $('title-particles');
+    if (!this.cv) return;
+    this.ctx = this.cv.getContext('2d');
+    this.resize();
+    window.addEventListener('resize', () => this.resize());
+    for (let i = 0; i < 34; i++) this.parts.push(this.petal(true));
+    for (let i = 0; i < 6; i++) this.parts.push(this.lantern(true));
+    const loop = () => {
+      requestAnimationFrame(loop);
+      /* 标题页隐藏时不绘制，省电 */
+      if ($('title-screen').classList.contains('hidden')) return;
+      this.step();
+    };
+    loop();
+  },
+  resize() { this.W = this.cv.width = window.innerWidth; this.H = this.cv.height = window.innerHeight; },
+  petal(any) {
+    return { k:'p', x:Math.random()*this.W, y:any ? Math.random()*this.H : -20 - Math.random()*40,
+      s:4+Math.random()*7, vy:.35+Math.random()*.8, ph:Math.random()*6.28, sw:.4+Math.random()*.8,
+      r:Math.random()*6.28, vr:(Math.random()-.5)*.03, a:.35+Math.random()*.45 };
+  },
+  lantern(any) {
+    return { k:'l', x:Math.random()*this.W, y:any ? Math.random()*this.H : this.H + 30,
+      s:2.5+Math.random()*3.5, vy:.15+Math.random()*.3, ph:Math.random()*6.28, a:.25+Math.random()*.35 };
+  },
+  step() {
+    const c = this.ctx;
+    c.clearRect(0, 0, this.W, this.H);
+    this.parts.forEach((p, i) => {
+      p.ph += .012;
+      if (p.k === 'p') {
+        /* 花瓣：飘落 + 左右摇摆 + 自旋 */
+        p.y += p.vy; p.x += Math.sin(p.ph) * p.sw; p.r += p.vr;
+        if (p.y > this.H + 30 || p.x < -40 || p.x > this.W + 40) this.parts[i] = this.petal(false);
+        c.save(); c.translate(p.x, p.y); c.rotate(p.r);
+        c.fillStyle = 'rgba(255,183,197,' + p.a + ')';
+        c.beginPath();
+        c.moveTo(0, -p.s);
+        c.bezierCurveTo(p.s*.9, -p.s*.5, p.s*.7, p.s*.7, 0, p.s);
+        c.bezierCurveTo(-p.s*.7, p.s*.7, -p.s*.9, -p.s*.5, 0, -p.s);
+        c.fill(); c.restore();
+      } else {
+        /* 灯笼光点：缓缓上升 + 暖光闪烁 */
+        p.y -= p.vy; p.x += Math.sin(p.ph) * .3;
+        if (p.y < -30) this.parts[i] = this.lantern(false);
+        c.save();
+        c.globalAlpha = p.a * (.7 + .3 * Math.sin(p.ph * 2));
+        c.shadowColor = 'rgba(255,170,80,.9)'; c.shadowBlur = 14;
+        c.fillStyle = '#ffc373';
+        c.beginPath(); c.ellipse(p.x, p.y, p.s, p.s * 1.25, 0, 0, 6.29); c.fill();
+        c.restore();
+      }
+    });
+  }
+};
+
 /* ================= 启动 ================= */
 bindUI();
 restoreSettings();
 loadScript(EMBEDDED_SCRIPT);
+TitleFx.init();
 document.addEventListener('click', unlockAudio, { once:false });
 </script>
+<script src="ai_gen.js"></script>
 </body>
 </html>

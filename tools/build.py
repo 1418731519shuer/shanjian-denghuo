@@ -12,6 +12,20 @@ DIST = os.path.join(ROOT, 'dist')
 # 目录: (最长边, 质量)
 RULES = {'bg': (1920, 80), 'cg': (1920, 85), 'chars': (1024, 85)}
 
+# 原样拷贝的目录（音频等不做转换）
+COPY_DIRS = ('bgm', 'sfx')
+
+def copy_plain(subdir):
+    """音频等非图片目录原样拷贝到 dist/assets/。"""
+    src_dir = os.path.join(SRC_ASSETS, subdir)
+    if not os.path.isdir(src_dir):
+        print('%-6s (不存在，跳过)' % subdir)
+        return
+    dst_dir = os.path.join(DIST, 'assets', subdir)
+    shutil.copytree(src_dir, dst_dir)
+    total = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(dst_dir) for f in fs)
+    print('%-6s %6.1fMB (原样拷贝)' % (subdir, total / 1e6))
+
 def convert(subdir, max_side, quality):
     src_dir = os.path.join(SRC_ASSETS, subdir)
     dst_dir = os.path.join(DIST, 'assets', subdir)
@@ -40,6 +54,9 @@ def main():
     for sub, (side, q) in RULES.items():
         convert(sub, side, q)
 
+    for sub in COPY_DIRS:
+        copy_plain(sub)
+
     # manifest.json 一并更新（记录用，不影响运行）
     man_src = os.path.join(SRC_ASSETS, 'manifest.json')
     if os.path.exists(man_src):
@@ -53,6 +70,11 @@ def main():
     # 引用形式为 "chars/xx.png" / "bg/xx.jpg"（assets_dir 前缀由引擎拼接）
     html = re.sub(r"((?:bg|cg|chars)/[^'\"()\\]+?)\.(?:png|jpg|jpeg)", r'\1.webp', html)
     open(os.path.join(DIST, 'index.html'), 'w', encoding='utf-8').write(html)
+
+    # AI 生成模块（网页端剧本生成，独立 JS；图片扩展名由它运行时自动探测，无需改写）
+    ai_gen = os.path.join(ROOT, 'ai_gen.js')
+    if os.path.exists(ai_gen):
+        shutil.copy(ai_gen, DIST)
 
     # PWA 静态文件
     shutil.copy(os.path.join(ROOT, 'manifest.webmanifest'), DIST)
@@ -99,6 +121,9 @@ def make_sw():
     import json, time
     files = ['./', './index.html', './manifest.webmanifest',
              './icons/icon-192.png', './icons/icon-512.png']
+    # ai_gen.js 存在时一并纳入预缓存（离线可用）
+    if os.path.exists(os.path.join(DIST, 'ai_gen.js')):
+        files.append('./ai_gen.js')
     for dp, _, fs in os.walk(os.path.join(DIST, 'assets')):
         for f in sorted(fs):
             rel = os.path.relpath(os.path.join(dp, f), DIST).replace(os.sep, '/')
