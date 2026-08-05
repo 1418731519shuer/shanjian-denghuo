@@ -1,0 +1,471 @@
+{
+  "meta": {
+    "title": "天平",
+    "author": "AI工坊",
+    "version": "1.0",
+    "defaults": {"text_speed": 25, "bgm_volume": 0.5, "auto_delay": 1800},
+    "voice_available": true
+  },
+  "attrs": {
+    "favor_mo": {"name": "沈墨染好感", "init": 0, "min": 0, "max": 100, "bar": "#7B9EBF", "bind": {"favor_wan": -0.15}},
+    "favor_wan": {"name": "苏晚晴好感", "init": 0, "min": 0, "max": 100, "bar": "#E8A87C", "bind": {"favor_mo": -0.15}},
+    "guilt": {"name": "负罪感", "init": 0, "min": 0, "max": 100, "bar": "#888"},
+    "charm": {"name": "魅力", "init": 10, "min": 0, "max": 100, "bar": "#F0E68C"}
+  },
+  "characters": {
+    "mo": {
+      "name": "沈墨染",
+      "color": "#7B9EBF",
+      "look": "二十八岁律所合伙人。黑色长发如瀑，眉眼清冷，常穿剪裁利落的深色西装裙。在你面前偶尔会摘下眼镜揉眉心，露出不为人知的疲惫和柔软。",
+      "sprites": {
+        "normal": "chars/mo_normal.png",
+        "smile": "chars/mo_smile.png",
+        "shy": "chars/mo_shy.png",
+        "sad": "chars/mo_sad.png",
+        "angry": "chars/mo_angry.png",
+        "surprise": "chars/mo_surprise.png"
+      }
+    },
+    "wan": {
+      "name": "苏晚晴",
+      "color": "#E8A87C",
+      "look": "二十六岁自由摄影师。短发挑染枫叶色，耳钉在阳光下闪，眼神亮得像能看穿一切。永远背着那台老旧胶片机，笑起来毫无防备。",
+      "sprites": {
+        "normal": "chars/wan_normal.png",
+        "smile": "chars/wan_smile.png",
+        "angry": "chars/wan_angry.png",
+        "sad": "chars/wan_sad.png",
+        "surprise": "chars/wan_surprise.png"
+      }
+    }
+  },
+  "assets_dir": "assets/",
+  "scenes": [
+    {
+      "id": "s1_cafe",
+      "background": "bg/cafe_afternoon.jpg",
+      "bgm": {"src": "bgm/cafe_jazz.mp3", "loop": true, "fade_in": 1.5, "volume": 0.6},
+      "sfx": ["sfx/cafe_ambient.wav"],
+      "checkpoint": true,
+      "chars": [],
+      "script": [
+        {"type": "narrate", "text": "九月的阳光从梧桐叶间漏下来，在咖啡馆的旧木桌上投下斑驳的影子。"},
+        {"type": "narrate", "text": "这是你搬来这座城市的第三天。行李还没拆完，但手头的项目不能再拖了——你抱着笔记本电脑，躲进了街角这家叫「迟暮」的咖啡馆。"},
+        {"type": "narrate", "text": "咖啡机发出低沉的闷响。你正在给策划案收尾，余光里忽然一亮——"},
+        {"type": "say", "who": "wan", "text": "这台 Mac 的屏占比真不错。做什么的？"},
+        {"type": "narrate", "text": "一个短发挑染枫叶色的女生端着美式站在你桌边,歪头看你的屏幕，毫不认生。"},
+        {"type": "say", "who": "wan", "text": "独立游戏？诶，这个有意思。我叫苏晚晴，这家的咖啡我喝了三年了，你这张桌子……是店里风水最好的位置。"},
+        {"type": "choice", "options": [
+          {"text": "合上电脑，礼貌回应：“我叫{player_name}。你是怎么判断'风水'的？”", "set": {"favor_wan": "favor_wan+5", "charm": "charm+2"}, "goto": "s1_cafe_talk"},
+          {"text": "笑着摇头：“开发者而已，算不上独立。”", "set": {"favor_wan": "favor_wan+3"}, "goto": "s1_cafe_talk"},
+          {"text": "继续盯着屏幕，敷衍地“嗯”了一声", "set": {"favor_wan": "favor_wan-3"}, "goto": "s1_cafe_talk"}
+        ]}
+      ]
+    },
+    {
+      "id": "s1_cafe_talk",
+      "background": "bg/cafe_afternoon.jpg",
+      "bgm": {"src": "bgm/cafe_jazz.mp3", "loop": true, "fade_in": 1.5, "volume": 0.6},
+      "chars": [
+        {"id": "wan", "pos": "right", "sprite": "smile", "effect": "fade"}
+      ],
+      "script": [
+        {"type": "say", "who": "wan", "text": "我是摄影师，自由接活那种。拍婚礼、拍产品、偶尔也拍人——你长得还算上相，改天给你拍一组？"},
+        {"type": "narrate", "text": "她笑起来的时候眼睛弯成月牙，像一只得了逞的猫。你注意到她颈间挂着一台老旧的胶片机，机身磨损得厉害，却保养得很好。"},
+        {"type": "say", "who": "wan", "text": "对了，既然刚搬来，晚上要不要一起吃个饭？我闺蜜在附近的律所上班，她那个人啊……表面冷得像块冰，其实比谁都心软。介绍你们认识。"},
+        {"type": "set", "vars": {"flag_wan_invite": 1}},
+        {"type": "choice", "options": [
+          {"text": "爽快答应：“好，反正晚上也没安排。”", "set": {"favor_wan": "favor_wan+4", "charm": "charm+1"}, "goto": "s2_law_firm"},
+          {"text": "“你闺蜜……不会介意多一个陌生人吧？”", "set": {"favor_wan": "favor_wan+2", "guilt": "guilt+3"}, "goto": "s2_law_firm"},
+          {"text": "婉拒：“今晚还有工作，改天吧。”", "set": {"favor_wan": "favor_wan-2"}, "goto": "s2_law_firm"},
+          {"text": "“你还是先问一下你闺蜜？”", "if": "favor_wan>=5", "set": {"favor_wan": "favor_wan+1", "flag_careful": 1}, "goto": "s2_law_firm"}
+        ]}
+      ]
+    },
+    {
+      "id": "s2_law_firm",
+      "background": "bg/law_firm_dusk.jpg",
+      "bgm": {"src": "bgm/city_dusk.mp3", "loop": true, "fade_in": 1.0, "volume": 0.5},
+      "chars": [],
+      "script": [
+        {"type": "narrate", "text": "傍晚六点半。苏晚晴拽着你穿过 CBD 的玻璃幕墙丛林，走进了「瀚海律师事务所」的大堂。"},
+        {"type": "narrate", "text": "前台已经下班了，走廊尽头的办公室里还亮着一盏孤灯。透过半磨砂玻璃，你看见一个纤长的剪影正低头批文件。"},
+        {"type": "say", "who": "wan", "text": "墨染！下班啦！我带了个活人给你！"},
+        {"type": "narrate", "text": "门开了。黑色长发如瀑的女人摘下眼镜看了过来，目光在你脸上停留了一秒——像被冰水划过，然后是克制的审视。"},
+        {"type": "say", "who": "mo", "text": "晚晴。我说过多少次，不要在办公室大喊大叫。"},
+        {"type": "narrate", "text": "她的声音很稳，没有责怪。转向你时，眼神里的距离感少了几分。"},
+        {"type": "say", "who": "mo", "text": "沈墨染。……你就是她说的那个'刚搬来的游戏开发者'？"},
+        {"type": "choice", "options": [
+          {"text": "微微欠身：“请多关照。希望晚晴没把我吹得太离谱。”", "set": {"favor_mo": "favor_mo+4", "charm": "charm+3"}, "goto": "s3_dinner"},
+          {"text": "“久仰。苏晚晴说你是'外冷内热'，现在看前半句没夸张。”", "set": {"favor_mo": "favor_mo+2", "favor_wan": "favor_wan+2", "flag_direct": 1}, "goto": "s3_dinner"},
+          {"text": "有点紧张地点头，没说多余的话", "set": {"favor_mo": "favor_mo+1", "guilt": "guilt+5"}, "goto": "s3_dinner"}
+        ]}
+      ]
+    },
+    {
+      "id": "s3_dinner",
+      "background": "bg/restaurant_evening.jpg",
+      "bgm": {"src": "bgm/restaurant.mp3", "loop": true, "fade_in": 1.0, "volume": 0.45},
+      "sfx": ["sfx/restaurant_ambient.wav"],
+      "chars": [
+        {"id": "mo", "pos": "left", "sprite": "normal", "effect": "fade"},
+        {"id": "wan", "pos": "right", "sprite": "smile", "effect": "fade"}
+      ],
+      "script": [
+        {"type": "narrate", "text": "三人落座。餐厅的灯光调得很暗，蜡烛在玻璃杯里漾开一圈暖黄。"},
+        {"type": "say", "who": "wan", "text": "墨染，你知道吗——他之前在独立团队做过，项目还拿过奖。"},
+        {"type": "say", "who": "mo", "text": "哦？哪个项目？"},
+        {"type": "narrate", "text": "沈墨染放下酒杯，看着你。苏晚晴抢在你前面替你回答了，语气里带着炫耀——好像你已经是她的人了。"},
+        {"type": "narrate", "text": "沈墨染轻轻笑了一下，那是你今晚第一次见到她的笑意。很淡，但足够让你记住。"},
+        {"type": "say", "who": "mo", "text": "所以你是在用代码讲故事的。这比大部分人以为的难。尤其是结局——让每个选择都通向它应该去的地方。"},
+        {"type": "say", "who": "wan", "text": "哎哟，我们墨染律师开课了。她平时对客户都懒得说这么多话。"},
+        {"type": "narrate", "text": "苏晚晴语气还是笑嘻嘻的，但她夹菜的动作顿了一下。你注意到了——她好像在确认什么。"},
+        {"type": "set", "vars": {"favor_mo": "favor_mo+3", "favor_wan": "favor_wan+4", "charm": "charm+2", "flag_trio_dinner": 1}},
+        {"type": "say", "who": "mo", "text": "{player_name}，你到这里做独立游戏……家人支持吗？"},
+        {"type": "choice", "options": [
+          {"text": "直视她回答：“支持。做游戏是我最清楚自己要做的事。”", "set": {"favor_mo": "favor_mo+5", "flag_confident": 1}, "goto": "s3_dinner_2"},
+          {"text": "“还在证明给他们看。”", "set": {"favor_mo": "favor_mo+2", "guilt": "guilt+5"}, "goto": "s3_dinner_2"},
+          {"text": "笑着看苏晚晴：“她刚才已经替我回答完了，我没什么好补充的。”", "set": {"favor_wan": "favor_wan+6", "favor_mo": "favor_mo-1"}, "goto": "s3_dinner_2"}
+        ]}
+      ]
+    },
+    {
+      "id": "s3_dinner_2",
+      "background": "bg/restaurant_evening.jpg",
+      "bgm": {"src": "bgm/restaurant.mp3", "loop": true, "fade_in": 1.0, "volume": 0.45},
+      "chars": [
+        {"id": "mo", "pos": "left", "sprite": "shy", "effect": "none"},
+        {"id": "wan", "pos": "right", "sprite": "smile", "effect": "none"}
+      ],
+      "script": [
+        {"type": "narrate", "text": "苏晚晴低头喝了一口酒。沈墨染把一缕垂落的长发别到耳后——这是她紧张时才有的动作。"},
+        {"type": "narrate", "text": "气氛忽然变了。不是尴尬，是某种温热的、沉甸甸的东西在三个人之间流动。像一个还没被戳破的气泡。"},
+        {"type": "say", "who": "mo", "text": "苏晚晴，你上次拍的那组城市夜景——给他看过吗？"},
+        {"type": "say", "who": "wan", "text": "还没。怎么，你要帮我要观众？"},
+        {"type": "say", "who": "mo", "text": "只是觉得他会懂。毕竟——他用画面讲故事，你用镜头。某种角度来说，你们在做同一件事。"},
+        {"type": "narrate", "text": "沈墨染说完这句话之后沉默了大概三秒。你看出来她在想什么——她把话题从自己身上移开了。习惯性地、下意识地。"},
+        {"type": "choice", "options": [
+          {"text": "对沈墨染说：“你呢？律师也是讲故事的人——你在法庭上讲的是真相。”", "set": {"favor_mo": "favor_mo+8", "charm": "charm+5", "flag_noticed_mo": 1}, "goto": "s4_after_dinner"},
+          {"text": "顺着话题转向苏晚晴：“那改天让我看看你拍的城市。”", "set": {"favor_wan": "favor_wan+6", "charm": "charm+2"}, "goto": "s4_after_dinner"},
+          {"text": "不接话，安静地给两人各倒了一杯酒", "set": {"favor_mo": "favor_mo+3", "favor_wan": "favor_wan+3", "charm": "charm+4"}, "goto": "s4_after_dinner"},
+          {"text": "“你俩认识多久了？讲讲第一次见面的故事呗。”", "set": {"favor_wan": "favor_wan+4", "favor_mo": "favor_mo+1", "flag_their_story": 1}, "goto": "s4_after_dinner"}
+        ]}
+      ]
+    },
+    {
+      "id": "s4_after_dinner",
+      "background": "bg/street_night.jpg",
+      "bgm": {"src": "bgm/night_walk.mp3", "loop": true, "fade_in": 1.0, "volume": 0.4},
+      "sfx": ["sfx/night_street.wav"],
+      "checkpoint": true,
+      "chars": [
+        {"id": "mo", "pos": "left", "sprite": "normal", "effect": "fade"},
+        {"id": "wan", "pos": "right", "sprite": "normal", "effect": "fade"}
+      ],
+      "script": [
+        {"type": "narrate", "text": "走出餐厅时夜色正浓。苏晚晴接了工作电话，走到几米外的路灯下。她的剪影被拉得很长，短发在夜风中微微扬起。"},
+        {"type": "narrate", "text": "沈墨染站在你旁边，沉默了一会。"},
+        {"type": "say", "who": "mo", "text": "我看得出来，晚晴很喜欢你。认识她六年，她从没带人过来找我。"},
+        {"type": "narrate", "text": "她语气平淡，但你知道她不会无缘无故说这种话。"},
+        {"type": "say", "who": "mo", "text": "我不是在帮你分析她。我只是想说——不管接下来发生什么，别让她哭。"},
+        {"type": "narrate", "text": "她说完就走了几步去叫车，背对着你。肩线挺拔，像一把还没拔出来的刀。"},
+        {"type": "say", "who": "wan", "text": "——喂！你俩在说什么悄悄话？"},
+        {"type": "narrate", "text": "苏晚晴挂了电话，朝你们走来。两束目光同时落在你身上——一束清冷锋利，一束炙热直接。"},
+        {"type": "narrate", "text": "你忽然意识到，这是一个不能同时走向两个人的路口。"},
+        {"type": "choice", "options": [
+          {"text": "对沈墨染说：“我叫好车了，先送你回去。”", "if": "favor_mo>=8", "set": {"favor_mo": "favor_mo+5", "favor_wan": "favor_wan-3", "flag_send_mo": 1}, "goto": "s5_mo_ride"},
+          {"text": "对苏晚晴说：“你家远，我陪你去地铁站。”", "if": "favor_wan>=8", "set": {"favor_wan": "favor_wan+5", "favor_mo": "favor_mo-3", "flag_send_wan": 1}, "goto": "s5_wan_walk"},
+          {"text": "“我送你们俩，顺路。”", "if": "favor_mo>=5 && favor_wan>=5", "set": {"favor_mo": "favor_mo+1", "favor_wan": "favor_wan+1", "guilt": "guilt+10", "flag_both": 1}, "goto": "s5_both_send"},
+          {"text": "“我自己走回去，需要静一静。”", "set": {"charm": "charm+1", "guilt": "guilt+15"}, "goto": "s5_alone"}
+        ]}
+      ]
+    },
+    {
+      "id": "s5_mo_ride",
+      "background": "bg/taxi_night.jpg",
+      "bgm": {"src": "bgm/intimate.mp3", "loop": true, "fade_in": 1.5, "volume": 0.5},
+      "sfx": ["sfx/car_interior.wav"],
+      "chars": [
+        {"id": "mo", "pos": "center", "sprite": "shy", "effect": "fade"}
+      ],
+      "script": [
+        {"type": "narrate", "text": "车里很安静。窗外的路灯一盏接一盏掠过，沈墨染把脸转向车窗，但玻璃上映出了她闭眼的样子。"},
+        {"type": "say", "who": "mo", "text": "……你刚才不用送我的。晚晴……她会注意到。"},
+        {"type": "say", "who": "mo", "text": "但谢谢你。"},
+        {"type": "narrate", "text": "她睁开眼，从后视镜里看了你一眼。那双眼睛在暗光里格外清澈，像结了薄冰的湖面下面有暗流。"},
+        {"type": "say", "who": "mo", "text": "你跟别人不太一样。大部分人第一次见我会觉得——很难接近。但你好像从一开始就看过去了我设的那层东西。"},
+        {"type": "choice", "options": [
+          {"text": "“也许是因为我自己也有一层壳。所以认得出。”", "set": {"favor_mo": "favor_mo+8", "flag_deep_mo": 1}, "goto": "s6_wan_notice"},
+          {"text": "“沈律师，你说得我好像在攻略你似的。”", "set": {"favor_mo": "favor_mo+2", "flag_tease_mo": 1}, "goto": "s6_wan_notice"},
+          {"text": "握住她的手（没有说话）", "if": "favor_mo>=12", "set": {"favor_mo": "favor_mo+10", "guilt": "guilt+8"}, "goto": "s6_mo_hand"}
+        ]}
+      ]
+    },
+    {
+      "id": "s6_mo_hand",
+      "background": "bg/taxi_night.jpg",
+      "bgm": {"src": "bgm/intimate.mp3", "loop": true, "fade_in": 1.5, "volume": 0.5},
+      "chars": [
+        {"id": "mo", "pos": "center", "sprite": "surprise", "effect": "none"}
+      ],
+      "script": [
+        {"type": "narrate", "text": "你的手指碰到她手背时，她整个人僵了一下。"},
+        {"type": "narrate", "text": "但下一秒她没有抽开。她的手指很凉，却在微微发颤。像雪地里一只终于停下来的鸟。"},
+        {"type": "say", "who": "mo", "text": "……{player_name}。"},
+        {"type": "narrate", "text": "她只说了你的名字。那个音节在她嘴里被放得很轻，像怕打碎什么。"},
+        {"type": "set", "vars": {"favor_mo": "favor_mo+5", "flag_touch_mo": 1}},
+        {"type": "goto", "target": "s6_wan_notice"}
+      ]
+    },
+    {
+      "id": "s5_wan_walk",
+      "background": "bg/street_night.jpg",
+      "bgm": {"src": "bgm/night_walk.mp3", "loop": true, "fade_in": 1.0, "volume": 0.4},
+      "sfx": ["sfx/night_street.wav"],
+      "chars": [
+        {"id": "wan", "pos": "center", "sprite": "smile", "effect": "fade"}
+      ],
+      "script": [
+        {"type": "narrate", "text": "你陪着苏晚晴往地铁站走。她走得很慢，偶尔停下来拍路灯下的水洼。"},
+        {"type": "say", "who": "wan", "text": "墨染今天说了好多话。平时她跟人吃饭能吃两口就离席。因为你她才留到最后的。"},
+        {"type": "say", "who": "wan", "text": "她对你有好感。我看得出来。"},
+        {"type": "narrate", "text": "她语气还是轻快的，但镜头盖在她手里无意识地咔嗒咔嗒——这是她紧张时才有的小动作。"},
+        {"type": "say", "who": "wan", "text": "你先送我。没有先送她。这让我差点误会了。"},
+        {"type": "narrate", "text": "她停下来，仰头看着你。夜风把她的刘海吹乱了，她没有去拨。"},
+        {"type": "choice", "options": [
+          {"text": "“没有误会。”", "set": {"favor_wan": "favor_wan+10", "flag_no_misunderstand": 1}, "goto": "s6_mo_notice"},
+          {"text": "“我只是顺路。”", "set": {"favor_wan": "favor_wan-5", "guilt": "guilt+5"}, "goto": "s6_mo_notice"},
+          {"text": "伸手帮她拨开额前的刘海", "set": {"favor_wan": "favor_wan+8", "flag_touch_wan": 1}, "goto": "s6_mo_notice"}
+        ]}
+      ]
+    },
+    {
+      "id": "s5_both_send",
+      "background": "bg/street_night.jpg",
+      "bgm": {"src": "bgm/night_walk.mp3", "loop": true, "fade_in": 1.0, "volume": 0.4},
+      "sfx": ["sfx/night_street.wav"],
+      "chars": [
+        {"id": "mo", "pos": "left", "sprite": "sad", "effect": "none"},
+        {"id": "wan", "pos": "right", "sprite": "normal", "effect": "fade"}
+      ],
+      "script": [
+        {"type": "narrate", "text": "她们俩对视了一秒。没有人反对，但也没有人笑。"},
+        {"type": "narrate", "text": "一路上你走在她俩中间。苏晚晴比平时安静，沈墨染比平时更安静。你试图聊点什么，但话出口之前就知道不对味。"},
+        {"type": "say", "who": "mo", "text": "就送到这儿吧。前面不远了。"},
+        {"type": "say", "who": "wan", "text": "嗯，我也是。今天开心。明天——算了，明天再说吧。"},
+        {"type": "narrate", "text": "她俩几乎同时转身，分别走向两条不同方向的路。留下你站在十字路口中央。"},
+        {"type": "set", "vars": {"guilt": "guilt+15"}},
+        {"type": "goto", "target": "s6_jealousy_dual"}
+      ]
+    },
+    {
+      "id": "s5_alone",
+      "background": "bg/street_night.jpg",
+      "bgm": {"src": "bgm/lonely_walk.mp3", "loop": true, "fade_in": 1.0, "volume": 0.35},
+      "sfx": ["sfx/night_street.wav"],
+      "chars": [],
+      "script": [
+        {"type": "narrate", "text": "你一个人走在深夜的街道上。手机震了两次。"},
+        {"type": "narrate", "text": "第一条来自苏晚晴：「到家了发个消息。」"},
+        {"type": "narrate", "text": "第二条来自沈墨染，只有四个字：「路上小心。」"},
+        {"type": "narrate", "text": "你看着两条消息挨在一起的屏幕。没有回复任何一条。"},
+        {"type": "goto", "target": "s6_jealousy_dual"}
+      ]
+    },
+    {
+      "id": "s6_wan_notice",
+      "background": "bg/cafe_rainy.jpg",
+      "bgm": {"src": "bgm/rainy_day.mp3", "loop": true, "fade_in": 1.0, "volume": 0.5},
+      "sfx": ["sfx/rain_window.wav"],
+      "chars": [
+        {"id": "wan", "pos": "center", "sprite": "sad", "effect": "fade"}
+      ],
+      "script": [
+        {"type": "narrate", "text": "三天后。下雨。"},
+        {"type": "narrate", "text": "苏晚晴约你在「迟暮」喝咖啡。这次她没有带相机。她坐在你对面，用勺子搅了几乎没动过的美式。"},
+        {"type": "say", "who": "wan", "text": "墨染最近不太回我消息。以前每天中午她都会发的。"},
+        {"type": "say", "who": "wan", "text": "我问她怎么了，她说没什么。但我知道有什么。从我带你见她那天开始，她就不一样了。"},
+        {"type": "narrate", "text": "她抬起头，笑起来的样子很勉强。"},
+        {"type": "say", "who": "wan", "text": "你别误会。我不是在怪你。我只是……想问问你。你觉得她——算了。"},
+        {"type": "choice", "options": [
+          {"text": "“晚晴，我只把墨染当成朋友。”", "set": {"favor_wan": "favor_wan+8", "flag_clarify_wan": 1}, "goto": "s7_final_choice"},
+          {"text": "“我喜欢沈墨染。对不起。”", "set": {"favor_mo": "favor_mo+5", "favor_wan": "favor_wan-15", "guilt": "guilt+10"}, "goto": "s6_wan_hurt"},
+          {"text": "沉默", "set": {"guilt": "guilt+20"}, "goto": "s6_wan_hurt"}
+        ]}
+      ]
+    },
+    {
+      "id": "s6_wan_hurt",
+      "background": "bg/cafe_rainy.jpg",
+      "bgm": {"src": "bgm/rainy_day.mp3", "loop": true, "fade_in": 1.0, "volume": 0.5},
+      "sfx": ["sfx/rain_window.wav"],
+      "chars": [
+        {"id": "wan", "pos": "center", "sprite": "angry", "effect": "none"}
+      ],
+      "script": [
+        {"type": "say", "who": "wan", "text": "……好。我知道了。"},
+        {"type": "narrate", "text": "她站起来的时候碰翻了杯子。咖啡在桌上漫开，她没有回头。你听见她的帆布鞋踩过水洼的声音，越来越远。"},
+        {"type": "goto", "target": "s7_final_choice"}
+      ]
+    },
+    {
+      "id": "s6_mo_notice",
+      "background": "bg/law_firm_office.jpg",
+      "bgm": {"src": "bgm/tense_office.mp3", "loop": true, "fade_in": 1.0, "volume": 0.4},
+      "chars": [
+        {"id": "mo", "pos": "center", "sprite": "sad", "effect": "fade"}
+      ],
+      "script": [
+        {"type": "narrate", "text": "沈墨染约你在办公室见面——这是第一次。她说的不是「咖啡馆」而是「我办公室」。"},
+        {"type": "narrate", "text": "你到的时候她正在整理案卷。动作比平时慢，好像每翻一页都要考虑一会。"},
+        {"type": "say", "who": "mo", "text": "晚晴昨天给我打了个电话。很晚了，她喝了酒。"},
+        {"type": "say", "who": "mo", "text": "她说你送她去了地铁站。先送她。没送我。"},
+        {"type": "narrate", "text": "她摘下眼镜，按了按眉心——那个你第一次见她就在心里记下了的动作。"},
+        {"type": "say", "who": "mo", "text": "我不应该在意这个。但我在意了。这件事本身就让我很生气——对自己生气。"},
+        {"type": "choice", "options": [
+          {"text": "“墨染，我想更了解你。不是作为晚晴的闺蜜。”", "set": {"favor_mo": "favor_mo+10", "flag_confess_mo": 1}, "goto": "s7_final_choice"},
+          {"text": "“对不起，我不想让你们之间难做。”", "set": {"guilt": "guilt+10", "favor_mo": "favor_mo-5"}, "goto": "s7_final_choice"},
+          {"text": "“我对你们两个都有好感。我不想骗你。”", "set": {"favor_mo": "favor_mo-10", "guilt": "guilt+8"}, "goto": "s7_final_choice"}
+        ]}
+      ]
+    },
+    {
+      "id": "s6_jealousy_dual",
+      "background": "bg/cafe_rainy.jpg",
+      "bgm": {"src": "bgm/rainy_day.mp3", "loop": true, "fade_in": 1.0, "volume": 0.5},
+      "sfx": ["sfx/rain_window.wav"],
+      "chars": [
+        {"id": "mo", "pos": "left", "sprite": "sad", "effect": "fade"},
+        {"id": "wan", "pos": "right", "sprite": "sad", "effect": "fade"}
+      ],
+      "script": [
+        {"type": "narrate", "text": "又一个雨天。你没想到她俩会同时出现在咖啡馆——苏晚晴从后门进来，沈墨染从前门进来。两人看到彼此时的动作一模一样：脚步停住。"},
+        {"type": "say", "who": "wan", "text": "墨染。真巧。"},
+        {"type": "say", "who": "mo", "text": "不算巧。这家店这么小。"},
+        {"type": "narrate", "text": "她俩同时看向你。窗外的雨忽然大了。"},
+        {"type": "say", "who": "wan", "text": "所以你是来找他的。"},
+        {"type": "say", "who": "mo", "text": "你不也是吗。"},
+        {"type": "narrate", "text": "空气中噼啪作响的不是雨声。你坐在中间，没有任何一句话能解开这个结。"},
+        {"type": "goto", "target": "s7_final_choice"}
+      ]
+    },
+    {
+      "id": "s7_final_choice",
+      "background": "bg/bridge_sunset.jpg",
+      "bgm": {"src": "bgm/climax.mp3", "loop": true, "fade_in": 1.5, "volume": 0.55},
+      "checkpoint": true,
+      "chars": [],
+      "script": [
+        {"type": "narrate", "text": "一周后。"},
+        {"type": "narrate", "text": "站在河边的桥上。夕阳把水面染成暗金色。手机里有两条未读消息，并列在一起。"},
+        {"type": "narrate", "text": "沈墨染：「周末有空吗？上次你说的那个游戏，我找了几个独立发行的渠道资料。顺便……想见你。」"},
+        {"type": "narrate", "text": "苏晚晴：「拿到城市灯光节的媒体通行证了。两张。你如果不想去也没关系，反正我一个人也能拍。」"},
+        {"type": "narrate", "text": "两条消息的发送时间相差不到一分钟。好像她们在心照不宣地——等你的回答。"},
+        {"type": "narrate", "text": "风吹过来的时候你闻到河水的味道。这座城市的秋天很短。你会在这个秋天结束之前，成为一个什么样的人？"},
+        {"type": "choice", "options": [
+          {"text": "回复沈墨染：「周末见。我想听你说说渠道的事——也想见你。」", "if": "favor_mo>=10", "set": {"flag_chose_mo": 1}, "goto": "end_mo"},
+          {"text": "回复苏晚晴：「两张票。那还有一张是给我的对吧。」", "if": "favor_wan>=10", "set": {"flag_chose_wan": 1}, "goto": "end_wan"},
+          {"text": "两条都回复：「好，周六见。」然后分别约了不同的时间", "if": "favor_mo>=8 && favor_wan>=8 && guilt>=15", "set": {"flag_chose_both": 1}, "goto": "end_dual"},
+          {"text": "没有回复任何人。关掉手机，望向河面", "set": {"flag_chose_none": 1}, "goto": "end_alone"}
+        ]}
+      ]
+    },
+    {
+      "id": "end_mo",
+      "background": "bg/law_firm_dusk.jpg",
+      "bgm": {"src": "bgm/ending_warm.mp3", "fade_in": 2.0, "volume": 0.6},
+      "chars": [
+        {"id": "mo", "pos": "center", "sprite": "smile", "effect": "fade"}
+      ],
+      "script": [
+        {"type": "narrate", "text": "周六傍晚，你走进瀚海律所。灯还亮着。"},
+        {"type": "say", "who": "mo", "text": "你来了。资料在这边……等一下，你先过来。"},
+        {"type": "narrate", "text": "她站起来走到你面前，摘掉了眼镜。没有了那层镜片的阻隔，她眼睛里有细碎的光。"},
+        {"type": "say", "who": "mo", "text": "你选择了我。你知道吗——我几乎没想过自己会被选。不是因为我不够好，是因为我从来不让自己期待。"},
+        {"type": "say", "who": "mo", "text": "但是，谢谢你让我赢了一次。"},
+        {"type": "narrate", "text": "她靠进你怀里，把脸埋在你肩头。黑色长发垂落下来，遮住了她微红的眼眶。"},
+        {"type": "narrate", "text": "窗外华灯初上。你怀里这个人——这座城市的钢筋混凝土之间最冷的那块冰——化在了你手上。而你不会让她后悔。"},
+        {"type": "narrate", "text": "当晚你收到苏晚晴的一条消息：「好好对她。你敢让她难过，我给你拍遗照。」"},
+        {"type": "narrate", "text": "——后面跟了一个笑脸。那个笑脸是真的。"},
+        {"type": "end", "label": "天平·墨染——你选择融化冰山，冰山下是只为你融化的春天"}
+      ]
+    },
+    {
+      "id": "end_wan",
+      "background": "bg/city_lights.jpg",
+      "bgm": {"src": "bgm/ending_bright.mp3", "fade_in": 2.0, "volume": 0.6},
+      "sfx": ["sfx/crowd_cheer.wav"],
+      "chars": [
+        {"id": "wan", "pos": "center", "sprite": "smile", "effect": "fade"}
+      ],
+      "script": [
+        {"type": "narrate", "text": "城市灯光节当晚。人潮涌动，苏晚晴扛着相机在人群中穿梭，不时回头喊你跟上。"},
+        {"type": "say", "who": "wan", "text": "快快快，前面那个灯组要灭了！站那儿——别动！"},
+        {"type": "narrate", "text": "她举起相机对着你。取景框后面的那只眼睛眯起来，快门声清脆而肯定。"},
+        {"type": "say", "who": "wan", "text": "——拍到了。这张是我今天拍的最好的一张。"},
+        {"type": "narrate", "text": "她把相机放下来，屏幕朝你。画面里的人，是你。"},
+        {"type": "say", "who": "wan", "text": "因为他们把整个城市点亮了，但你才是我想拍的光。"},
+        {"type": "narrate", "text": "她的笑容没有任何杂质。那一刻你忽然懂了——她没有沈墨染的深邃，但她有她的坦荡。"},
+        {"type": "narrate", "text": "喜欢一个人，在苏晚晴这里，就是大大方方地告诉你，不加任何修饰。"},
+        {"type": "narrate", "text": "当晚你收到沈墨染的一条消息：「灯光节的票是我帮她弄到的。她开心就好。你照顾好她。」"},
+        {"type": "narrate", "text": "你看完这条消息，苏晚晴把手塞进你手心。暖暖的。"},
+        {"type": "end", "label": "天平·晚晴——你选择了太阳，太阳从不需要你融化任何东西"}
+      ]
+    },
+    {
+      "id": "end_dual",
+      "background": "bg/street_night.jpg",
+      "bgm": {"src": "bgm/ending_sad.mp3", "fade_in": 2.0, "volume": 0.45},
+      "chars": [],
+      "script": [
+        {"type": "narrate", "text": "第一周。你分别和沈墨染喝咖啡，和苏晚晴逛灯会。她们不知道彼此还在跟你见面。"},
+        {"type": "narrate", "text": "第二周。苏晚晴在沈墨染的办公桌上看到了你的笔。她什么都没说就走了。"},
+        {"type": "narrate", "text": "第三周。沈墨染给苏晚晴打了电话。电话那头沉默了很久。然后她说：'我没怪你。我怪的是我自己。我早知道会这样。'"},
+        {"type": "narrate", "text": "第四周。没有人再回复你的消息。"},
+        {"type": "narrate", "text": "你站在桥上，看着那条河。秋天快结束了。手机里存着还没删除的聊天记录。"},
+        {"type": "narrate", "text": "沈墨染最后一次发的是：「有些选择不是非黑即白。但你不是法官，你逃避了判决。这本身就是判决。」"},
+        {"type": "narrate", "text": "苏晚晴最后一条：「我以为我赢了一次。原来你没有在比赛。」"},
+        {"type": "narrate", "text": "河水不急不缓地流过去。天平两端都想留住，最后什么也托不住。"},
+        {"type": "end", "label": "天平·落空——贪心的人，分不清是赢了两个还是一个也没留住"}
+      ]
+    },
+    {
+      "id": "end_alone",
+      "background": "bg/bridge_sunset.jpg",
+      "bgm": {"src": "bgm/ending_sad.mp3", "fade_in": 2.0, "volume": 0.45},
+      "chars": [],
+      "script": [
+        {"type": "narrate", "text": "你把手机放进口袋。没有回复任何人。"},
+        {"type": "narrate", "text": "日落在河面上铺开。风吹过来，秋天的凉意从领口灌进去。"},
+        {"type": "narrate", "text": "你知道她们两个都会失望。也许明天你会解释，也许不会。也许逃避本身也是一种回答——"},
+        {"type": "narrate", "text": "一个让所有人都不会受伤，但所有人都会失望的回答。"},
+        {"type": "narrate", "text": "你一个人沿着河岸走下去。身后城市亮起万家灯火，但没有一盏在等你。"},
+        {"type": "end", "label": "天平·独行——不选择也是一种选择。只是这个选择里没有人"}
+      ]
+    },
+    {
+      "id": "end_mo_true",
+      "background": "bg/law_firm_dusk.jpg",
+      "bgm": {"src": "bgm/ending_warm.mp3", "fade_in": 2.0, "volume": 0.6},
+      "require": "flag_noticed_mo==1 && flag_deep_mo==1 && favor_mo>=25",
+      "require_else": "end_mo",
+      "chars": [
+        {"id": "mo", "pos": "center", "sprite": "shy", "effect": "fade"},
+        {"id": "wan", "pos": "right", "sprite": "smile", "effect": "fade"}
+      ],
+      "script": [
+        {"type": "narrate", "text": "一个月后。苏晚晴推开你工作室的门，把一沓照片拍在桌上。"},
+        {"type": "say", "who": "wan", "text": "喏——给你们拍的。这张是上周咖啡馆，这张是那天晚上在桥上，这张——你别看墨染，她闭眼了。"},
+        {"type": "say", "who": "mo", "text": "……苏晚晴。你什么时候偷拍的？"},
+        {"type": "say", "who": "wan", "text": "不叫偷拍，叫纪实。你俩站在一起的时候画面构图还不错——便宜你们了。"},
+        {"type": "narrate", "text": "苏晚晴把一张照片推到沈墨染面前。是她们俩的合影——不知道什么时候拍的，画面里两个人都没有看镜头，默契地看向同一个方向。"},
+        {"type": "narrate", "text": "那个方向，是你站的地方。"},
+        {"type": "say", "who": "wan", "text": "行了，我走了。下次带酒来，你俩请客。别问我为什么——就当是介绍费。"},
+        {"type": "narrate", "text": "她戴好相机走出去。门关上之前回头看了你一眼，眨了眨眼。"},
+        {"type": "narrate", "text": "有些人在你的故事里来过。即使不是主角，她也是那个按下快门的人。"},
+        {"type": "narrate", "text": "而快门之外——你下意识握紧了沈墨染的手。她回握得很紧。"},
+        {"type": "end", "label": "天平·墨染·真——她的冰面下藏着深海，而你潜了进去，没有被淹死，反而学会了呼吸"}
+      ]
+    }
+  ]
+}
