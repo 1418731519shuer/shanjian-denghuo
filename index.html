@@ -2755,6 +2755,12 @@ bindUI();
 restoreSettings();
 loadScript(EMBEDDED_SCRIPT);
 TitleFx.init();
+/* ai_gen.js 以 defer 加载，首次 refreshTitle 时 window.AutoNovel 尚不存在；
+   DOMContentLoaded 时（defer 脚本已执行）重新判定一次 AI 生成入口的显隐 */
+document.addEventListener('DOMContentLoaded', () => {
+  const aiBtn = $('btn-ai-gen');
+  if (aiBtn) aiBtn.classList.toggle('hidden', !(window.AutoNovel && typeof window.AutoNovel.open === 'function'));
+});
 document.addEventListener('click', unlockAudio, { once:false });
 </script>
 <script src="ai_gen.js" defer></script>
