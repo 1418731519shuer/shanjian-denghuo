@@ -363,8 +363,9 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
       <button class="tbtn hidden" id="btn-ai-gen">AI生成</button>
       <button class="tbtn" id="btn-editor">场景编辑器</button>
       <button class="tbtn" id="btn-load-script">载入剧本</button>
+      <button class="tbtn" id="btn-text-demo">文字脚本示例</button>
     </div>
-    <input type="file" id="script-file" accept=".json" class="hidden">
+    <input type="file" id="script-file" accept=".json,.txt" class="hidden">
     <div id="ending-info"></div>
     <div id="warnings"></div>
   </div>
@@ -2539,8 +2540,29 @@ function bindUI() {
   $('script-file').onchange = ev => {
     const f = ev.target.files[0]; if (!f) return;
     const r = new FileReader();
-    r.onload = () => { try { loadScript(JSON.parse(r.result)); } catch (e) { alert('JSON 解析失败：' + e.message); } };
+    r.onload = () => {
+      if (/\.txt$/i.test(f.name)) {
+        /* 文字脚本：走浏览器版编译器（tsc.js），错误带行号中文 */
+        if (!window.TextScript) { alert('文字脚本编译器（tsc.js）未加载'); return; }
+        try {
+          const res = window.TextScript.compile(String(r.result));
+          (res.warnings || []).forEach(w => console.warn('[文字脚本告警]', w));
+          loadScript(res.script);
+        } catch (e) { alert('文字脚本编译失败：\n' + e.message); }
+      } else {
+        try { loadScript(JSON.parse(r.result)); } catch (e) { alert('JSON 解析失败：' + e.message); }
+      }
+    };
     r.readAsText(f);
+  };
+  /* 文字脚本示例：零准备体验分支+数值判断（tsc.js 以 defer 加载，点击时已就绪） */
+  $('btn-text-demo').onclick = () => {
+    if (!window.TextScript) { alert('文字脚本编译器（tsc.js）未加载'); return; }
+    try {
+      const res = window.TextScript.compile(window.TextScript.DEMO);
+      (res.warnings || []).forEach(w => console.warn('[文字脚本告警]', w));
+      loadScript(res.script);
+    } catch (e) { alert('内置示例编译失败：\n' + e.message); }
   };
   const onAdvanceClick = ev => { unlockAudio(); if (waiting === 'advance') advance(); };
   $('dlg').onclick = onAdvanceClick;
@@ -2763,6 +2785,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 document.addEventListener('click', unlockAudio, { once:false });
 </script>
+<script src="tsc.js" defer></script>
 <script src="ai_gen.js" defer></script>
 </body>
 </html>

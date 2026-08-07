@@ -4,7 +4,7 @@
  *
  * 用法：node tools/e2e_test.mjs
  *   自动完成：启动 python http.server 伺服 dist/ → 启动 headless Edge（远程调试端口）
- *   → 通过 CDP（原生 WebSocket）驱动页面跑 10 个用例 → 打印结果 → 清理进程。
+ *   → 通过 CDP（原生 WebSocket）驱动页面跑 15 个用例 → 打印结果 → 清理进程。
  *
  * 环境变量可覆盖默认值：
  *   E2E_EDGE      Edge 可执行文件路径
@@ -190,6 +190,13 @@ async function main() {
   cdp.on('Log.entryAdded', p => {
     const e = p.entry;
     if (e.level === 'error') errors.push(`log[${e.source}]: ${(e.text || '').slice(0, 300)}`);
+  });
+
+  /* alert/confirm 自动接受并记录文案（用例 14 断言编译错误弹窗用） */
+  const dialogs = [];
+  cdp.on('Page.javascriptDialogOpening', p => {
+    dialogs.push(p.message || '');
+    cdp.send('Page.handleJavaScriptDialog', { accept: true }).catch(() => {});
   });
 
   const gotoReady = async url => {
@@ -469,6 +476,74 @@ async function main() {
     await sleep(200);
     await ev(`window.AutoNovel.close && window.AutoNovel.close()`).catch(() => {});
     return '日志含「额度不足」中文提示';
+  });
+
+  /* ---------- 用例 13：文字脚本示例按钮 → 浏览器内编译 → 开玩 ---------- */
+  await runCase('13. 「文字脚本示例」按钮：编译内置 DEMO → 进入《灯下问仙》可推进', async () => {
+    if (!(await visible('#title-screen'))) { await ev(`backToTitle()`); await waitFor(() => visible('#title-screen'), 5000, '回标题'); }
+    if (!(await ev(`!!document.getElementById('btn-text-demo')`))) throw new Error('缺按钮 #btn-text-demo');
+    await click('#btn-text-demo');
+    await waitFor(async () => (await ev(`document.getElementById('game-title').textContent`)) === '灯下问仙' || null, 8000, '标题切换为《灯下问仙》');
+    const nScenes = await ev(`script.scenes.length`);
+    if (nScenes !== 8) throw new Error('DEMO 应为 8 场景，实际 ' + nScenes);
+    await click('#btn-start');
+    await waitFor(() => visible('#name-input-overlay'), 5000, '命名弹窗');
+    await ev(`document.getElementById('name-input-field').value = '脚本体验员'`);
+    await click('#name-input-confirm');
+    await waitFor(async () => (await ev(`document.getElementById('dlgtext').textContent.length`)) > 0, 8000, '首条对话');
+    const r = await advanceDlg(3);
+    if (r.dlg < 3) throw new Error(`只推进了 ${r.dlg} 条`);
+    await ev(`backToTitle()`);
+    await waitFor(() => visible('#title-screen'), 5000, '回标题');
+    return `编译→载入→开玩，推进 ${r.dlg} 条（场景×${nScenes}）`;
+  });
+
+  /* ---------- 用例 14：喂入有错的 .txt → 带行号错误弹窗，游戏不崩 ---------- */
+  await runCase('14. 载入坏文字脚本（未定义场景引用）→ 行号错误提示且不崩', async () => {
+    const badTxt = ['# 标题 坏脚本', '@角色 su 苏璃 #FFB6C1', '==场景 b1', '@su normal center',
+      '旁白。', '-> ghost_scene', '::结局 坏结局', ''].join('\n');
+    const badPath = path.join(os.tmpdir(), 'wenyou-e2e-bad.txt');
+    fs.writeFileSync(badPath, badTxt, 'utf8');
+    dialogs.length = 0;
+    await cdp.send('DOM.enable');
+    const doc = await cdp.send('DOM.getDocument', { depth: 1 });
+    const q = await cdp.send('DOM.querySelector', { nodeId: doc.root.nodeId, selector: '#script-file' });
+    await cdp.send('DOM.setFileInputFiles', { files: [badPath], nodeId: q.nodeId });
+    const msg = await waitFor(() => dialogs.length ? dialogs[0] : null, 10000, '编译错误弹窗');
+    if (!/第\d+行/.test(msg)) throw new Error('弹窗缺行号: ' + msg.slice(0, 120));
+    if (!/未定义的场景/.test(msg)) throw new Error('弹窗缺「未定义的场景」: ' + msg.slice(0, 120));
+    /* 引擎未被破坏：仍是《灯下问仙》，标题页正常 */
+    if (!(await visible('#title-screen'))) throw new Error('标题页不可见，游戏疑似崩溃');
+    const nScenes = await ev(`script.scenes.length`);
+    if (nScenes !== 8) throw new Error('剧本被坏文件污染: scenes=' + nScenes);
+    return '弹窗=' + msg.split('\n').find(l => /第\d+行/.test(l));
+  });
+
+  /* ---------- 用例 15：喂入合法迷你 .txt → 载入成功可玩到结局 ---------- */
+  await runCase('15. 载入合法迷你文字脚本 → 开玩直达结局', async () => {
+    const miniTxt = ['# 标题 迷你测试', '# 作者 e2e', '@角色 su 苏璃 #FFB6C1',
+      '%属性 fav 好感 0 0 10 #FFB6C1', '==场景 m1', '@su normal center',
+      '你好，迷你世界。', '苏璃(微笑): 第一句话。', '旁白第二句。', '?',
+      '> 去结局 {fav+1} -> m2', '==场景 m2', '苏璃: 结局到了。', '::结局 迷你结局', ''].join('\n');
+    const miniPath = path.join(os.tmpdir(), 'wenyou-e2e-mini.txt');
+    fs.writeFileSync(miniPath, miniTxt, 'utf8');
+    dialogs.length = 0;
+    const doc = await cdp.send('DOM.getDocument', { depth: 1 });
+    const q = await cdp.send('DOM.querySelector', { nodeId: doc.root.nodeId, selector: '#script-file' });
+    await cdp.send('DOM.setFileInputFiles', { files: [miniPath], nodeId: q.nodeId });
+    await waitFor(async () => (await ev(`document.getElementById('game-title').textContent`)) === '迷你测试' || null, 8000, '标题切换为《迷你测试》');
+    if (dialogs.length) throw new Error('合法脚本不应弹窗: ' + dialogs[0].slice(0, 120));
+    await click('#btn-start');
+    await waitFor(() => visible('#name-input-overlay'), 5000, '命名弹窗');
+    await ev(`document.getElementById('name-input-field').value = '迷你玩家'`);
+    await click('#name-input-confirm');
+    await waitFor(async () => (await ev(`document.getElementById('dlgtext').textContent.length`)) > 0, 8000, '首条对话');
+    const r = await advanceDlg(15);
+    if (!r.ended) throw new Error(`未达结局（推进 ${r.dlg} 条）`);
+    const label = await ev(`document.getElementById('end-label').textContent`);
+    if (!label.includes('迷你结局')) throw new Error('结局名不符: ' + label);
+    await ev(`backToTitle()`);
+    return `载入→开玩→${label}`;
   });
 
   /* ================= 汇总 ================= */

@@ -76,6 +76,11 @@ def main():
     if os.path.exists(ai_gen):
         shutil.copy(ai_gen, DIST)
 
+    # 文字脚本编译器（浏览器版 tsc，独立 JS，零依赖）
+    tsc_js = os.path.join(ROOT, 'tsc.js')
+    if os.path.exists(tsc_js):
+        shutil.copy(tsc_js, DIST)
+
     # PWA 静态文件
     shutil.copy(os.path.join(ROOT, 'manifest.webmanifest'), DIST)
     make_icons()
@@ -132,9 +137,10 @@ def make_sw():
     import json, time
     files = ['./', './index.html', './manifest.webmanifest',
              './icons/icon-192.png', './icons/icon-512.png']
-    # ai_gen.js 存在时一并纳入预缓存（离线可用）
-    if os.path.exists(os.path.join(DIST, 'ai_gen.js')):
-        files.append('./ai_gen.js')
+    # ai_gen.js / tsc.js 存在时一并纳入预缓存（离线可用）
+    for js in ('ai_gen.js', 'tsc.js'):
+        if os.path.exists(os.path.join(DIST, js)):
+            files.append('./' + js)
     for dp, _, fs in os.walk(os.path.join(DIST, 'assets')):
         for f in sorted(fs):
             rel = os.path.relpath(os.path.join(dp, f), DIST).replace(os.sep, '/')
