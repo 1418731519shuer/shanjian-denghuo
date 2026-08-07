@@ -1,0 +1,423 @@
+{
+  "meta": {
+    "title": "灯下问仙",
+    "author": "文游工坊",
+    "version": "1.0",
+    "defaults": {
+      "text_speed": 25,
+      "bgm_volume": 0.5,
+      "auto_delay": 1800
+    }
+  },
+  "attrs": {
+    "favor": {
+      "name": "苏璃好感",
+      "init": 0,
+      "min": 0,
+      "max": 100,
+      "bar": "#FFB6C1"
+    },
+    "xiuwei": {
+      "name": "修为",
+      "init": 0,
+      "min": 0,
+      "max": 100,
+      "bar": "#87CEEB"
+    }
+  },
+  "characters": {
+    "su": {
+      "name": "苏璃",
+      "color": "#FFB6C1",
+      "sprites": {
+        "normal": "chars/su_normal.png",
+        "smile": "chars/su_smile.png",
+        "angry": "chars/su_angry.png",
+        "sad": "chars/su_sad.png",
+        "surprise": "chars/su_surprise.png"
+      }
+    },
+    "shen": {
+      "name": "沈青",
+      "color": "#87CEEB",
+      "sprites": {
+        "normal": "chars/shen_normal.png",
+        "smile": "chars/shen_smile.png",
+        "angry": "chars/shen_angry.png",
+        "sad": "chars/shen_sad.png",
+        "surprise": "chars/shen_surprise.png"
+      }
+    },
+    "tang": {
+      "name": "阿棠",
+      "color": "#E8C47E",
+      "sprites": {
+        "normal": "chars/tang_normal.png",
+        "smile": "chars/tang_smile.png",
+        "angry": "chars/tang_angry.png",
+        "sad": "chars/tang_sad.png",
+        "surprise": "chars/tang_surprise.png"
+      }
+    },
+    "wan": {
+      "name": "掌门",
+      "color": "#DDA0DD",
+      "sprites": {
+        "normal": "chars/wan_normal.png",
+        "smile": "chars/wan_smile.png",
+        "angry": "chars/wan_angry.png",
+        "sad": "chars/wan_sad.png",
+        "surprise": "chars/wan_surprise.png"
+      }
+    },
+    "mo": {
+      "name": "莫师兄",
+      "color": "#98FB98",
+      "sprites": {
+        "normal": "chars/mo_normal.png",
+        "smile": "chars/mo_smile.png",
+        "angry": "chars/mo_angry.png",
+        "sad": "chars/mo_sad.png",
+        "surprise": "chars/mo_surprise.png"
+      }
+    }
+  },
+  "assets_dir": "assets/",
+  "scenes": [
+    {
+      "id": "s1_town",
+      "script": [
+        {
+          "type": "narrate",
+          "text": "你回到灯溪镇那天，风里都是灯油的味道。三年了，山门试炼就在今夜。"
+        },
+        {
+          "type": "say",
+          "who": "su",
+          "text": "阿灯！三年不见，你总算回来啦！"
+        },
+        {
+          "type": "say",
+          "who": "su",
+          "text": "你怀里……还揣着那只没做完的兔子灯？"
+        },
+        {
+          "type": "narrate",
+          "text": "离试炼只剩一个下午。你打算去哪儿？"
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "goto": "s2_lantern",
+              "set": {
+                "favor": "favor+6"
+              },
+              "text": "陪苏璃放灯"
+            },
+            {
+              "goto": "s2_bamboo",
+              "set": {
+                "xiuwei": "xiuwei+15"
+              },
+              "text": "去竹林闭关"
+            },
+            {
+              "goto": "s3_test",
+              "if": "xiuwei>=20",
+              "text": "直接闯山门"
+            }
+          ]
+        }
+      ],
+      "background": "bg/town_day.jpg",
+      "bgm": "bgm/town_day.mp3",
+      "sfx": "sfx/wind_chime.wav",
+      "checkpoint": true,
+      "chars": [
+        {
+          "id": "su",
+          "sprite": "normal",
+          "pos": "center"
+        }
+      ]
+    },
+    {
+      "id": "s2_lantern",
+      "script": [
+        {
+          "type": "narrate",
+          "text": "灯笼铺里，苏璃把竹骨一根根剖开，灯影在她指尖摇晃。"
+        },
+        {
+          "type": "say",
+          "who": "su",
+          "text": "帮我拉住灯口，别动。扎歪了你赔。"
+        },
+        {
+          "type": "narrate",
+          "text": "你看着她低垂的睫毛，忽然觉得这三年像一阵风。"
+        },
+        {
+          "type": "inspect",
+          "x": 0.42,
+          "y": 0.62,
+          "w": 0.16,
+          "h": 0.18,
+          "show": {
+            "text": "粗陶茶盏，盏底有一道旧磕痕，是三年前你失手磕的。",
+            "image": "cg/teacup.png"
+          }
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "goto": "s3_test",
+              "set": {
+                "favor": "favor+6"
+              },
+              "if": "favor>=5",
+              "text": "买下那只兔子灯送她"
+            },
+            {
+              "goto": "s3_test",
+              "text": "默默离开"
+            }
+          ]
+        }
+      ],
+      "background": "bg/lantern_shop.jpg",
+      "bgm": "bgm/shop_warm.mp3",
+      "chars": [
+        {
+          "id": "su",
+          "sprite": "smile",
+          "pos": "left"
+        }
+      ]
+    },
+    {
+      "id": "s2_bamboo",
+      "script": [
+        {
+          "type": "narrate",
+          "text": "竹林深处，沈青收剑而立，落叶在她肩头停了一瞬。"
+        },
+        {
+          "type": "say",
+          "who": "shen",
+          "text": "闭关三日，可有长进？"
+        },
+        {
+          "type": "say",
+          "who": "shen",
+          "text": "拔剑。让我看看你这三年没偷懒。"
+        },
+        {
+          "type": "show",
+          "image": "cg/sword_light.jpg"
+        },
+        {
+          "type": "narrate",
+          "text": "一剑过后，竹梢齐齐断了一片。"
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "goto": "s3_test",
+              "set": {
+                "xiuwei": "xiuwei+10"
+              },
+              "if": "xiuwei>=10",
+              "text": "与沈青再切磋一轮"
+            },
+            {
+              "goto": "s3_test",
+              "text": "下山赴试"
+            }
+          ]
+        }
+      ],
+      "background": "bg/bamboo.jpg",
+      "bgm": "bgm/bamboo_wind.mp3",
+      "sfx": "sfx/bamboo_rustle.wav",
+      "chars": [
+        {
+          "id": "shen",
+          "sprite": "normal",
+          "pos": "right"
+        }
+      ]
+    },
+    {
+      "id": "s3_test",
+      "script": [
+        {
+          "type": "narrate",
+          "text": "山门试炼，一剑问心。掌门端坐云台之上，莫师兄侍立一旁。"
+        },
+        {
+          "type": "say",
+          "who": "wan",
+          "text": "来者，报上你的道。"
+        },
+        {
+          "type": "narrate",
+          "text": "你如今的修为是{xiuwei}，苏璃对你的好感是{favor}。"
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "goto": "s_end_sword",
+              "if": "xiuwei>=25",
+              "text": "拔剑问天"
+            },
+            {
+              "goto": "s_end_love",
+              "if": "favor>=12",
+              "text": "与苏璃归隐灯下"
+            },
+            {
+              "goto": "s_end_join",
+              "text": "拜入山门修行"
+            }
+          ]
+        }
+      ],
+      "background": "bg/bamboo_night.jpg",
+      "bgm": "bgm/tense.mp3",
+      "checkpoint": true,
+      "require": "xiuwei>=20 || favor>=10",
+      "require_else": "s3_fallback",
+      "chars": [
+        {
+          "id": "wan",
+          "sprite": "normal",
+          "pos": "center"
+        },
+        {
+          "id": "mo",
+          "sprite": "normal",
+          "pos": "left"
+        }
+      ]
+    },
+    {
+      "id": "s3_fallback",
+      "script": [
+        {
+          "type": "narrate",
+          "text": "试炼落第，山门的灯在你身后一盏盏熄了。山脚下的茶棚还亮着一盏。"
+        },
+        {
+          "type": "say",
+          "who": "tang",
+          "text": "客官，进来喝杯热茶吧，山里风大。"
+        },
+        {
+          "type": "narrate",
+          "text": "你接过茶盏，热气氤氲里忽然觉得，修仙这件事，好像也不着急。"
+        },
+        {
+          "type": "end",
+          "label": "归隐茶棚"
+        }
+      ],
+      "background": "bg/teashelter_night.jpg",
+      "bgm": "bgm/teashelter.mp3",
+      "chars": [
+        {
+          "id": "tang",
+          "sprite": "normal",
+          "pos": "center"
+        }
+      ]
+    },
+    {
+      "id": "s_end_sword",
+      "script": [
+        {
+          "type": "show",
+          "image": "cg/sword_light.jpg"
+        },
+        {
+          "type": "say",
+          "who": "mo",
+          "text": "一剑……天门真的开了！"
+        },
+        {
+          "type": "narrate",
+          "text": "云海翻涌，霞光万道。你收剑入鞘，山风猎猎。"
+        },
+        {
+          "type": "end",
+          "label": "剑开天门"
+        }
+      ],
+      "background": "bg/bridge_sunset.jpg",
+      "bgm": "bgm/ending.mp3",
+      "sfx": "sfx/sword_whoosh.wav",
+      "chars": [
+        {
+          "id": "mo",
+          "sprite": "surprise",
+          "pos": "left"
+        }
+      ]
+    },
+    {
+      "id": "s_end_love",
+      "script": [
+        {
+          "type": "narrate",
+          "text": "上元灯火如昼，那只兔子灯终于做完了。"
+        },
+        {
+          "type": "say",
+          "who": "su",
+          "text": "这一次，不许再走啦。"
+        },
+        {
+          "type": "narrate",
+          "text": "满城灯火里，你牵住了她的手。"
+        },
+        {
+          "type": "end",
+          "label": "灯火良缘"
+        }
+      ],
+      "background": "bg/festival_night.jpg",
+      "bgm": "bgm/festival.mp3",
+      "sfx": "sfx/crowd_cheer.wav",
+      "chars": [
+        {
+          "id": "su",
+          "sprite": "smile",
+          "pos": "center"
+        }
+      ]
+    },
+    {
+      "id": "s_end_join",
+      "script": [
+        {
+          "type": "narrate",
+          "text": "山门晨钟暮鼓，从此青灯相伴。"
+        },
+        {
+          "type": "narrate",
+          "text": "偶尔下山，你会给灯溪镇捎一包新茶。"
+        },
+        {
+          "type": "end",
+          "label": "青灯问道"
+        }
+      ],
+      "background": "bg/town_day.jpg",
+      "bgm": "bgm/ending.mp3"
+    }
+  ]
+}

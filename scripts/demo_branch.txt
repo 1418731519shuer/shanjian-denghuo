@@ -1,0 +1,85 @@
+// ============================================================
+// 灯下问仙 · 文字脚本实战示例
+// 两条分支线（放灯线 / 闭关线）+ 数值门控选项 + require 场景门 + 四结局
+// 编译：python tools/tsc.py scripts/demo_branch.txt -o scripts/demo_branch.json
+// ============================================================
+# 标题 灯下问仙
+# 作者 文游工坊
+
+@角色 su 苏璃 #FFB6C1 立绘=su
+@角色 shen 沈青 #87CEEB 立绘=shen
+@角色 tang 阿棠 #E8C47E 立绘=tang
+@角色 wan 掌门 #DDA0DD 立绘=wan
+@角色 mo 莫师兄 #98FB98 立绘=mo
+
+%属性 favor 苏璃好感 0 0 100 #FFB6C1
+%属性 xiuwei 修为 0 0 100 #87CEEB
+
+==场景 s1_town 背景=town_day 音乐=town_day 音效=wind_chime 存档点
+@su normal center
+你回到灯溪镇那天，风里都是灯油的味道。三年了，山门试炼就在今夜。
+苏璃(微笑): 阿灯！三年不见，你总算回来啦！
+苏璃(惊讶): 你怀里……还揣着那只没做完的兔子灯？
+离试炼只剩一个下午。你打算去哪儿？
+?
+> 陪苏璃放灯 {favor+6} -> s2_lantern
+> 去竹林闭关 {xiuwei+15} -> s2_bamboo
+> 直接闯山门 [xiuwei>=20] -> s3_test
+
+==场景 s2_lantern 背景=lantern_shop 音乐=shop_warm
+@su smile left
+灯笼铺里，苏璃把竹骨一根根剖开，灯影在她指尖摇晃。
+苏璃(微笑): 帮我拉住灯口，别动。扎歪了你赔。
+你看着她低垂的睫毛，忽然觉得这三年像一阵风。
+!调查 0.42,0.62,0.16,0.18 图=teacup 文=粗陶茶盏，盏底有一道旧磕痕，是三年前你失手磕的。
+?
+> 买下那只兔子灯送她 [favor>=5] {favor+6} -> s3_test
+> 默默离开 -> s3_test
+
+==场景 s2_bamboo 背景=bamboo 音乐=bamboo_wind 音效=bamboo_rustle
+@shen normal right
+竹林深处，沈青收剑而立，落叶在她肩头停了一瞬。
+沈青: 闭关三日，可有长进？
+沈青(生气): 拔剑。让我看看你这三年没偷懒。
+!show sword_light
+一剑过后，竹梢齐齐断了一片。
+?
+> 与沈青再切磋一轮 [xiuwei>=10] {xiuwei+10} -> s3_test
+> 下山赴试 -> s3_test
+
+==场景 s3_test 背景=bamboo_night 音乐=tense 存档点 进入条件="xiuwei>=20 || favor>=10" 条件跳转=s3_fallback
+@wan normal center
+@mo normal left
+山门试炼，一剑问心。掌门端坐云台之上，莫师兄侍立一旁。
+掌门: 来者，报上你的道。
+你如今的修为是{xiuwei}，苏璃对你的好感是{favor}。
+?
+> 拔剑问天 [xiuwei>=25] -> s_end_sword
+> 与苏璃归隐灯下 [favor>=12] -> s_end_love
+> 拜入山门修行 -> s_end_join
+
+==场景 s3_fallback 背景=teashelter_night 音乐=teashelter
+@tang normal center
+试炼落第，山门的灯在你身后一盏盏熄了。山脚下的茶棚还亮着一盏。
+阿棠(微笑): 客官，进来喝杯热茶吧，山里风大。
+你接过茶盏，热气氤氲里忽然觉得，修仙这件事，好像也不着急。
+::结局 归隐茶棚
+
+==场景 s_end_sword 背景=bridge_sunset 音乐=ending 音效=sword_whoosh
+@mo surprise left
+!show sword_light
+莫师兄(惊讶): 一剑……天门真的开了！
+云海翻涌，霞光万道。你收剑入鞘，山风猎猎。
+::结局 剑开天门
+
+==场景 s_end_love 背景=festival_night 音乐=festival 音效=crowd_cheer
+@su smile center
+上元灯火如昼，那只兔子灯终于做完了。
+苏璃(微笑): 这一次，不许再走啦。
+满城灯火里，你牵住了她的手。
+::结局 灯火良缘
+
+==场景 s_end_join 背景=town_day 音乐=ending
+山门晨钟暮鼓，从此青灯相伴。
+偶尔下山，你会给灯溪镇捎一包新茶。
+::结局 青灯问道
