@@ -370,6 +370,107 @@ async function main() {
     return `场景卡片 ${cards}，时间轴块 ${blocks}`;
   });
 
+  /* ---------- 用例 11：AI 生成全流程（mock API，免费离线验证管线） ---------- */
+  await runCase('11. AI生成新故事（mock API）→ 生成→校验→映射→开玩', async () => {
+    /* 劫持 fetch：识别 chat/completions，按 prompt 类型返回预制 SSE 流 */
+    await ev(`(() => {
+      const OUTLINE = { acts: [{ id: 'act1', title: '茶棚夜雨',
+        scenes: [
+          { id: 's1_start', summary: '雨夜茶棚初遇', background: 'bg/tea.jpg', chars: ['c1'], checkpoint: true },
+          { id: 's_end_warm', summary: '结局·暖灯', background: 'bg/lantern.jpg', chars: ['c1', 'c2'] },
+        ], flags_introduced: [] }],
+        endings: [{ label: '结局·暖灯', condition: '' }] };
+      const SCENES = [
+        { id: 's1_start', background: 'bg/tea.jpg', checkpoint: true,
+          chars: [{ id: 'c1', pos: 'center', sprite: 'normal' }],
+          script: [
+            { type: 'narrate', text: '雨敲茶棚，灯影摇晃。' },
+            { type: 'say', who: 'c1', text: '客官，进来避避雨吧。' },
+            { type: 'choice', options: [
+              { text: '进棚喝茶', goto: 's_end_warm' },
+              { text: '继续赶路', goto: 's_end_warm' } ] } ] },
+        { id: 's_end_warm', background: 'bg/lantern.jpg',
+          chars: [{ id: 'c1', pos: 'left', sprite: 'smile' }, { id: 'c2', pos: 'right', sprite: 'normal' }],
+          script: [
+            { type: 'say', who: 'c2', text: '这盏灯，给你留着。' },
+            { type: 'narrate', text: '雨停了。' },
+            { type: 'end', label: '结局·暖灯' } ] } ];
+      window.__mock402 = false;
+      window.__origFetch = window.fetch;
+      window.fetch = (url, opts) => {
+        if (String(url).indexOf('chat/completions') < 0) return window.__origFetch(url, opts);
+        if (window.__mock402) return Promise.resolve(new Response(JSON.stringify({ error: { message: 'quota' } }),
+          { status: 402, headers: { 'Content-Type': 'application/json' } }));
+        const prompt = JSON.parse(opts.body).messages.map(m => m.content).join('\\n');
+        const payload = prompt.indexOf('分幕大纲') >= 0 ? OUTLINE
+          : (prompt.indexOf('请修复') >= 0 ? { scenes: SCENES } : { scenes: SCENES });
+        const sse = 'data: ' + JSON.stringify({ choices: [{ delta: { content: JSON.stringify(payload) } }] }) + '\\n\\ndata: [DONE]\\n\\n';
+        return Promise.resolve(new Response(sse, { status: 200, headers: { 'Content-Type': 'text/event-stream' } }));
+      };
+    })()`);
+    /* 打开 AI 生成模态，填表，生成 */
+    if (!(await visible('#title-screen'))) { await click('#mb-title'); await waitFor(() => visible('#title-screen'), 5000, '回标题'); }
+    await click('#btn-ai-gen');
+    await waitFor(() => visible('#an-form'), 5000, 'AI 生成表单');
+    await ev(`document.getElementById('an-theme').value = 'mock茶棚夜雨'`);
+    await ev(`(() => {
+      const names = document.querySelectorAll('.an-char-name'), descs = document.querySelectorAll('.an-char-desc');
+      names[0].value = '阿茶'; descs[0].value = '温柔茶娘';
+      names[1].value = '行客'; descs[1].value = '沉默旅人';
+    })()`);
+    await ev(`document.getElementById('an-scenes').value = '3'`);
+    await ev(`document.getElementById('an-key').value = 'mock-key'`);
+    await click('#an-generate');
+    await waitFor(() => visible('#an-done'), 60000, '生成完成面板');
+    const doneText = await ev(`document.getElementById('an-done-log').textContent`);
+    if (!/生成完成/.test(doneText)) throw new Error('结果面板异常: ' + doneText.slice(0, 80));
+    /* 开玩：新剧本载入，可推进 */
+    await click('#an-play');
+    await sleep(500);
+    if (await visible('#name-input-overlay')) {
+      await ev(`document.getElementById('name-input-field').value = 'mock玩家'`);
+      await click('#name-input-confirm');
+    }
+    await waitFor(async () => (await ev(`document.getElementById('dlgtext').textContent.length`)) > 0, 8000, '新剧本首条对话');
+    const title = await ev(`document.getElementById('game-title').textContent`);
+    const sprite = await ev(`(() => { const i = document.querySelector('.slot img'); return i && i.src ? i.src : null; })()`);
+    if (sprite && !/chars\/(su|shen|tang|mo|wan)_/.test(sprite)) throw new Error('立绘未映射到现有素材库: ' + sprite);
+    let steps = 0, ended = false;
+    for (let i = 0; i < 30 && steps < 4; i++) {
+      const t = await step();
+      if (t === 'dlg') steps++;
+      if (t === 'end') { ended = true; break; }
+      await sleep(80);
+    }
+    if (steps < 3) throw new Error('新剧本只推进了 ' + steps + ' 条');
+    return '标题=' + title + '，推进 ' + steps + ' 条' + (ended ? '，已到结局' : '') + '，立绘映射=' + (sprite ? sprite.split('/').pop() : '剪影兜底');
+  });
+
+  /* ---------- 用例 12：AI 生成 402 额度不足友好提示 ---------- */
+  await runCase('12. AI生成 402 → 显示额度不足提示', async () => {
+    await ev(`document.getElementById('mb-title') && document.getElementById('mb-title').click()`).catch(() => {});
+    await sleep(300);
+    if (!(await visible('#title-screen'))) await ev(`backToTitle()`);
+    await waitFor(() => visible('#title-screen'), 5000, '回标题');
+    await ev(`window.__mock402 = true`);
+    await click('#btn-ai-gen');
+    await waitFor(() => visible('#an-form'), 5000, 'AI 生成表单');
+    await ev(`document.getElementById('an-theme').value = 'mock额度测试'`);
+    await ev(`document.getElementById('an-key').value = 'mock-key'`);
+    await click('#an-generate');
+    await waitFor(async () => {
+      const t = await ev(`document.getElementById('an-log').textContent`);
+      return /额度不足|生成失败/.test(t) ? t : null;
+    }, 30000, '402 错误提示出现');
+    const logText = await ev(`document.getElementById('an-log').textContent`);
+    if (!/额度不足/.test(logText)) throw new Error('缺少「额度不足」提示: ' + logText.slice(-120));
+    await ev(`window.__mock402 = false; window.fetch = window.__origFetch;`);
+    await ev(`document.getElementById('an-cancel').click()`).catch(() => {});
+    await sleep(200);
+    await ev(`window.AutoNovel.close && window.AutoNovel.close()`).catch(() => {});
+    return '日志含「额度不足」中文提示';
+  });
+
   /* ================= 汇总 ================= */
   console.log('\n================ E2E 结果 ================');
   let pass = 0;
