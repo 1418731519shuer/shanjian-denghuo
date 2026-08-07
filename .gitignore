@@ -1,3 +1,6 @@
 dist/
 __pycache__/
 *.pyc
+dist_text/
+games_output/
+index_text_demo.html
