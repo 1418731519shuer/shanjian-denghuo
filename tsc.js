@@ -18,12 +18,23 @@
 'use strict';
 
 var EMOTIONS = ['normal', 'smile', 'angry', 'sad', 'surprise'];
+// 已知立绘套装的真实表情清单（按 assets/chars 实际文件核对，与 ai_gen.js SPRITE_SETS 一致）：
+// 五套都有标准 5 表情，mo 额外有 shy。表内套装只生成真实存在的 sprites 键，
+// 引用缺失表情时引擎 spritePath 自动回退 normal，文件缺失降级剪影，不会破图。
+var KNOWN_SETS = {
+  su: EMOTIONS,
+  shen: EMOTIONS,
+  tang: EMOTIONS,
+  mo: EMOTIONS.concat(['shy']),
+  wan: EMOTIONS
+};
 var EMO_ALIAS = {
   normal: 'normal', '平常': 'normal', '普通': 'normal', '平静': 'normal',
   smile: 'smile', '微笑': 'smile', '笑': 'smile', '开心': 'smile', '高兴': 'smile',
   angry: 'angry', '生气': 'angry', '怒': 'angry', '愤怒': 'angry',
   sad: 'sad', '难过': 'sad', '悲伤': 'sad', '伤心': 'sad', '哭': 'sad',
-  surprise: 'surprise', '惊讶': 'surprise', '吃惊': 'surprise', '震惊': 'surprise'
+  surprise: 'surprise', '惊讶': 'surprise', '吃惊': 'surprise', '震惊': 'surprise',
+  shy: 'shy', '害羞': 'shy', '羞涩': 'shy', '脸红': 'shy'
 };
 var ASSET_PREFIX = { '背景': 'bg', '音乐': 'bgm', '音效': 'sfx', '图': 'cg' };
 var ID_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -533,7 +544,7 @@ Compiler.prototype.parseText = function (n, line) {
       var cmd = { type: 'say', who: cid, text: text, _line: n };
       if (emo) {
         var e = hasOwn(EMO_ALIAS, emo.trim()) ? EMO_ALIAS[emo.trim()] : null;
-        if (!e) throw new CompileError(n, '未知表情 "' + emo + '"（支持 ' + EMOTIONS.join('、') + ' 及中文别名）');
+        if (!e) throw new CompileError(n, '未知表情 "' + emo + '"（支持 ' + EMOTIONS.join('、') + '、shy 及中文别名）');
       }
       if (cond !== null) cmd.if = cond;
       this.cur.script.push(cmd);
@@ -692,7 +703,22 @@ Compiler.prototype.assemble = function () {
   Object.keys(this.characters).forEach(function (cid) {
     var c = self.characters[cid];
     var sprites = {};
-    EMOTIONS.forEach(function (e) { sprites[e] = withImgExt('chars/' + c.prefix + '_' + e + '.png'); });
+    if (hasOwn(KNOWN_SETS, c.prefix)) {
+      // 已知套装：只生成真实存在的表情键（缺表情时引擎回退 normal，不会破图）
+      KNOWN_SETS[c.prefix].forEach(function (e) {
+        sprites[e] = withImgExt('chars/' + c.prefix + '_' + e + '.png');
+      });
+    } else {
+      // 自定义前缀：标准 5 表情 + 脚本站位里实际用到的额外表情（如 shy）；
+      // 文件是否存在无法验证，缺失时引擎降级剪影
+      EMOTIONS.forEach(function (e) { sprites[e] = withImgExt('chars/' + c.prefix + '_' + e + '.png'); });
+      self.scenes.forEach(function (sc) {
+        (sc.chars || []).forEach(function (ch) {
+          if (ch.id === cid && ch.sprite && !hasOwn(sprites, ch.sprite))
+            sprites[ch.sprite] = withImgExt('chars/' + c.prefix + '_' + ch.sprite + '.png');
+        });
+      });
+    }
     chars[cid] = { name: c.name, color: c.color, sprites: sprites };
   });
   var scenes = this.scenes.map(function (sc) {

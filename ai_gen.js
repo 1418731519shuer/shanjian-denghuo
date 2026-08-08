@@ -104,8 +104,18 @@
   const BG_FALLBACK_DAY = 'bg/town_day.jpg';
   const BG_FALLBACK_NIGHT = 'bg/street_night.jpg';
 
-  // 立绘套装：生成角色按顺序映射到这 5 套（c1→su, c2→shen, ...）
-  const SPRITE_SETS = ['su', 'shen', 'tang', 'mo', 'wan'];
+  // 立绘套装：生成角色按顺序映射到这 5 套（c1→su, c2→shen, ...）。
+  // emotions 按 assets/chars 真实存在的文件核对（2026-08，dev .png / dist .webp 一致）：
+  // 五套都有 normal/smile/angry/sad/surprise，mo 额外有 shy。
+  // 表里没有的表情不会生成 sprites 键，引擎 spritePath 会自动回退 normal（再退任意一个），
+  // 文件缺失时引擎降级剪影，不会破图。
+  const SPRITE_SETS = [
+    { name: 'su',   emotions: DEFAULT_EMOTIONS },
+    { name: 'shen', emotions: DEFAULT_EMOTIONS },
+    { name: 'tang', emotions: DEFAULT_EMOTIONS },
+    { name: 'mo',   emotions: DEFAULT_EMOTIONS.concat(['shy']) },
+    { name: 'wan',  emotions: DEFAULT_EMOTIONS },
+  ];
   // 角色名字框默认配色（与现有角色色系一致）
   const CHAR_COLORS = ['#FFB6C1', '#87CEEB', '#E8C47E', '#C8A2E8'];
 
@@ -278,6 +288,8 @@
       '严禁引用未列出的场景 id（包括所谓 s_end 开头的结局场景——结局也是普通 scene）；' +
       '结局场景就是一个 script 最后一条指令为 end 的普通 scene，' +
       '若本幕是最后一幕，必须包含至少一个这样的结局场景（多结局就多个）。' +
+      '每个 scene 的 chars 必须列出本场景所有出场角色（元素含 id 和 pos，pos 取 left|center|right），' +
+      'chars 为空或漏人，该角色就不会显示；script 中每条 say 的 who 必须已列入该 scene 的 chars。' +
       'background 用 bg/英文小写名.jpg；checkpoint 场景应为剧情关键节点。'
     );
   }
@@ -373,6 +385,20 @@
       if (cleaned !== null) script.push(cleaned);
     });
     scene.script = script;
+    // say.who 不在本 scene.chars 时人物不会显示：告警并自动补入空槽位
+    // （引擎运行时也会自动补，但显式补上更稳，剧本 JSON 自洽）
+    const stationed = {};
+    for (const c of scene.chars) stationed[c.id] = true;
+    for (const cmd of scene.script) {
+      if (cmd.type !== 'say' || !cmd.who || stationed[cmd.who]) continue;
+      const usedPos = {};
+      for (const c of scene.chars) if (c.pos) usedPos[c.pos] = true;
+      const freePos = POS_VALUES.find(p => !usedPos[p]) || 'center';
+      scene.chars.push({ id: cmd.who, pos: freePos, effect: 'fade' });
+      stationed[cmd.who] = true;
+      warnings.push('scene ' + scene.id + ': say.who ' + cmd.who +
+        ' 未列入 chars 站位，已自动补入（pos=' + freePos + '）');
+    }
     return scene;
   }
 
@@ -505,19 +531,29 @@
   }
 
   /* ================= 资源映射（生成路径 → 现有素材库） ================= */
-  // 关键词打分选背景：语料 = 生成的 background 文件名 + scene id + summary + 题材
-  function pickBackground(corpus) {
+  // 关键词打分选背景：语料 = 生成的 background 文件名 + scene id + summary + 题材。
+  // used（可选，Set）为本剧本已用过的背景：同分时优先选没用过的；
+  // 无关键词命中走兜底时，兜底已用过则从整张表挑一张没用过的（轻量多样性，避免全剧同一张背景）。
+  function pickBackground(corpus, used) {
     const text = (corpus || '').toLowerCase();
     const isNight = /night|evening|dusk|dark|夜|晚|黄昏/.test(text);
     const table = isNight ? BG_NIGHT_TABLE.concat(BG_TABLE) : BG_TABLE;
-    let best = null, bestScore = 0;
+    let bestScore = 0;
+    const cands = [];
     for (const item of table) {
       let score = 0;
       for (const kw of item.kw) if (text.indexOf(kw.toLowerCase()) >= 0) score++;
-      if (score > bestScore) { bestScore = score; best = item.file; }
+      if (score > bestScore) { bestScore = score; cands.length = 0; cands.push(item.file); }
+      else if (score === bestScore && score > 0) cands.push(item.file);
     }
-    if (!best) best = isNight ? BG_FALLBACK_NIGHT : BG_FALLBACK_DAY;
-    return best;
+    if (cands.length) {
+      if (used) for (const f of cands) if (!used.has(f)) return f;
+      return cands[0];
+    }
+    const fb = isNight ? BG_FALLBACK_NIGHT : BG_FALLBACK_DAY;
+    if (!used || !used.has(fb)) return fb;
+    for (const item of table) if (!used.has(item.file)) return item.file;
+    return fb;
   }
 
   function pickCg(corpus) {
@@ -575,26 +611,39 @@
       for (const s of act.scenes || []) summaryOf[s.id] = s.summary || '';
     }
 
-    // 1) 角色：c1..cn → su/shen/tang/mo/wan 五套立绘
+    // 1) 角色：c1..cn → su/shen/tang/mo/wan 五套立绘（只生成真实存在的表情键）
     const cids = Object.keys(scriptJson.characters || {});
     cids.forEach((cid, i) => {
-      const setName = SPRITE_SETS[i % SPRITE_SETS.length];
+      const set = SPRITE_SETS[i % SPRITE_SETS.length];
       const sprites = {};
-      for (const emo of DEFAULT_EMOTIONS) {
-        sprites[emo] = withExt('chars/' + setName + '_' + emo + '.png', ext);
+      for (const emo of set.emotions) {
+        sprites[emo] = withExt('chars/' + set.name + '_' + emo + '.png', ext);
       }
       scriptJson.characters[cid].sprites = sprites;
-      log.push('角色 ' + scriptJson.characters[cid].name + '（' + cid + '）→ 立绘套装 ' + setName);
+      log.push('角色 ' + scriptJson.characters[cid].name + '（' + cid + '）→ 立绘套装 ' +
+        set.name + '（' + set.emotions.length + ' 表情）');
     });
 
-    // 2) 场景：背景关键词映射；音频引用移除（素材库暂无 bgm/sfx）
+    // 2) 场景：背景关键词映射（同分优先选本剧本没用过的，避免全剧同一张背景）
+    const usedBgs = new Set();
     for (const scene of scriptJson.scenes || []) {
       const corpus = [scene.background || '', scene.id || '', summaryOf[scene.id] || '', theme].join(' ');
-      const mapped = pickBackground(corpus);
+      const mapped = pickBackground(corpus, usedBgs);
+      usedBgs.add(mapped);
       if (scene.background !== mapped) {
         log.push('背景 ' + (scene.background || '(无)') + ' → ' + mapped);
       }
       scene.background = withExt(mapped, ext);
+
+      // 站位引用的表情若该套装没有（如对 wan 用 shy），显式回退 normal，
+      // 不等引擎兜底（引擎也会回退，但显式改写后剧本 JSON 自洽、可查）
+      for (const c of scene.chars || []) {
+        const sp = c.id && scriptJson.characters[c.id] && scriptJson.characters[c.id].sprites;
+        if (c.sprite && sp && !(c.sprite in sp)) {
+          log.push('scene ' + scene.id + ': 角色 ' + c.id + ' 的套装无表情 ' + c.sprite + '，已回退 normal');
+          c.sprite = 'normal';
+        }
+      }
 
       // 音频：关键词映射到现有音频库（DOVA-SYNDROME 免费可商用资源）
       const audioCorpus = corpus + ' ' + (summaryOf[scene.id] || '');
