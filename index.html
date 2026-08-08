@@ -315,7 +315,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
 #se-canvas-chars { position:absolute; inset:0; z-index:1; }
 #se-canvas-hotspots { position:absolute; inset:0; z-index:2; }
 /* Preview overlay on canvas */
-#se-preview-overlay { position:absolute; left:0; right:0; bottom:0; height:30%; z-index:10; background:rgba(10,12,20,.88); border-top:1px solid rgba(255,255,255,.2); padding:1em 2em; display:none; pointer-events:auto; }
+#se-preview-overlay { position:absolute; left:0; right:0; bottom:0; height:30%; z-index:10; background:rgba(10,12,20,.88); border-top:1px solid rgba(255,255,255,.2); padding:1em 2em; display:none; pointer-events:auto; overflow-y:auto; }
 #se-preview-overlay.show { display:flex; flex-direction:column; }
 #se-pv-namebox { font-weight:bold; font-size:.9em; margin-bottom:.3em; display:none; cursor:pointer; }
 #se-pv-namebox.show { display:block; }
@@ -327,6 +327,50 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
 /* Game preview iframe at bottom */
 #se-game-preview { height:18vh; min-height:100px; border-top:2px solid #3a4a63; background:#000; }
 #se-game-preview iframe { width:100%; height:100%; border:none; }
+
+/* ---- 剪辑式时间轴：插入隙 / 指令选择盘 ---- */
+#tl-insert-row { display:flex; align-items:center; height:16px; margin:1px 0; }
+#tl-insert-row .tl-blocks { background:transparent; overflow:visible; }
+.tl-gap { position:absolute; top:0; bottom:0; cursor:pointer; z-index:2; display:flex; align-items:center; justify-content:center; }
+.tl-gap::after { content:'+'; font-size:10px; line-height:1; color:#7fa0d0; background:#141a28;
+  border:1px solid #3a4a63; border-radius:50%; width:13px; height:13px; display:flex; align-items:center; justify-content:center;
+  opacity:0; transition:opacity .15s; }
+.tl-gap:hover::after { opacity:1; }
+.tl-gap.drop-hi::after { opacity:1; color:#ffd75e; border-color:#ffd75e; }
+.tl-block[draggable=true] { cursor:grab; }
+.tl-block.dragging { opacity:.4; }
+
+/* 通用锚点弹层（chip 小面板） */
+.se-pop { position:fixed; z-index:300; background:#141a28; border:1px solid #7fa0d0; border-radius:.5em;
+  padding:.7em; box-shadow:0 6px 24px rgba(0,0,0,.65); font-size:.8em; max-width:min(92vw,420px); }
+.se-pop h4 { margin:0 0 .5em; font-size:.95em; letter-spacing:.08em; }
+
+/* 画布选项卡片（choice 可视化编辑） */
+.opt-card { display:flex; flex-wrap:wrap; gap:4px; align-items:center; margin:4px 0;
+  background:rgba(40,60,95,.45); border:1px solid rgba(127,160,208,.35); border-radius:6px; padding:5px 6px; }
+.opt-card input.opt-text { flex:1 1 140px; min-width:120px; padding:4px 6px; background:#0c1120; color:#eee;
+  border:1px solid #5a7bb0; border-radius:4px; font-size:.9em; }
+.opt-chip { display:inline-block; padding:2px 8px; border-radius:10px; font-size:.72em; cursor:pointer;
+  border:1px solid #3a4a63; background:#1a2040; white-space:nowrap; max-width:150px; overflow:hidden; text-overflow:ellipsis; }
+.opt-chip:hover { filter:brightness(1.3); }
+.opt-chip.goto { border-color:#7fa0d0; color:#a8c4ff; }
+.opt-chip.set { border-color:#4a8a5d; color:#98FB98; }
+.opt-chip.cond { border-color:#c0a050; color:#ffd75e; }
+.opt-chip.empty { opacity:.55; border-style:dashed; }
+.opt-del { color:#c44; cursor:pointer; font-size:.75em; padding:0 4px; }
+
+/* 变量行 / 条件构造器 */
+.set-row, .cb-row { display:flex; gap:4px; align-items:center; margin:3px 0; }
+.set-row select, .set-row input, .cb-row select, .cb-row input {
+  padding:3px 4px; background:#0c1120; color:#eee; border:1px solid #5a7bb0; border-radius:3px; font-size:.85em; }
+.cb-join { font-size:.75em; color:#ffd75e; cursor:pointer; padding:1px 6px; border:1px dashed #c0a050; border-radius:8px; }
+
+/* 上传素材面板 */
+#upload-panel .up-row { display:flex; gap:.5em; align-items:center; margin:.5em 0; flex-wrap:wrap; }
+#upload-panel select, #upload-panel input[type=text] { padding:.35em; background:#0c1120; color:#eee; border:1px solid #5a7bb0; border-radius:3px; }
+#upload-preview { max-width:180px; max-height:110px; border:1px solid #3a4a63; border-radius:4px; }
+.up-hint { font-size:.75em; opacity:.6; line-height:1.6; }
+.up-err { color:#ff8a7a; font-size:.8em; min-height:1.2em; }
 
 @media (max-aspect-ratio: 3/4) {
   .slot { width:40%; height:60%; }
@@ -509,6 +553,8 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
     <button class="btn small" id="se-play-scene">▶预览</button>
     <button class="btn small" id="se-export-json">导出</button>
     <button class="btn small" id="se-attrs">属性</button>
+    <button class="btn small" id="se-upload-asset">上传素材</button>
+    <button class="btn small" id="se-import-pack">素材包</button>
     <button class="btn small" id="se-exit">退出</button>
   </div>
   <div id="se-body">
@@ -548,6 +594,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
     <button class="btn small" id="se-qadd-end" style="font-size:.6em;padding:.1em .4em">+结局</button>
   </div>
   <div id="se-timeline-wrap">
+    <div class="tl-track" id="tl-insert-row"><span class="tl-label">剪辑</span><div class="tl-blocks"></div></div>
     <div class="tl-track" id="tl-dialog"><span class="tl-label">对白</span><div class="tl-blocks"></div></div>
     <div id="tl-chars-container"></div>
     <div class="tl-track" id="tl-audio"><span class="tl-label">音频</span><div class="tl-blocks"></div></div>
@@ -568,6 +615,10 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
     <button class="btn" id="attr-editor-close">关闭</button>
   </div>
 </div>
+
+<!-- 上传素材 / 素材包 隐藏文件输入 -->
+<input type="file" id="asset-file-input" accept="image/*,audio/*" class="hidden">
+<input type="file" id="pack-file-input" accept=".json" class="hidden">
 
 <script>
 'use strict';
@@ -597,7 +648,9 @@ let bgmPoll = null;
 const lsKey = k => 'wenyou_' + (script ? script.meta.title : 'x') + '_' + k;
 const getSeen = () => JSON.parse(localStorage.getItem(lsKey('seen')) || '[]');
 const markSeen = k => { const s = getSeen(); if (!s.includes(k)) { s.push(k); localStorage.setItem(lsKey('seen'), JSON.stringify(s)); } };
-const assetUrl = p => (script.assets_dir || '') + p;
+/* 自定义素材库：path -> dataURL（上传素材注册于此，assetUrl 优先解析） */
+let customAssets = {};
+const assetUrl = p => (customAssets[p] ? customAssets[p] : (script.assets_dir || '') + p);
 
 /* 回看记录：最多保留最近 100 条 */
 function pushHistory(item) { history.push(item); if (history.length > 100) history.splice(0, history.length - 100); }
@@ -1382,7 +1435,7 @@ function exitEditor() {
 }
 function refreshEditorScenes() {
   const box = $('se-scenes');
-  box.innerHTML = '<div style="font-size:.75em;opacity:.6;margin-bottom:.3em">拖拽卡片排序 | 点击编辑 | <button class="btn small" id="se-show-branch">分支图</button></div>';
+  box.innerHTML = '<div style="font-size:.75em;opacity:.6;margin-bottom:.3em">拖拽卡片排序 | 点击编辑 | 底部「剪辑」行点 + 插入指令、拖色块到空隙重排 | <button class="btn small" id="se-show-branch">分支图</button></div>';
   // Branch graph
   const branchDiv = document.createElement('div');
   branchDiv.id = 'se-branch-graph';
@@ -1447,6 +1500,8 @@ function probeAsset(url, cb) { const i = new Image(); i.onload = () => cb(true);
 function collectBgAssets() {
   const out = [];
   script.scenes.forEach(s => { if (s.background && s.background !== 'none' && !out.includes(s.background)) out.push(s.background); });
+  /* 自定义素材库里的背景也进网格 */
+  Object.keys(customAssets).forEach(p => { if (p.startsWith('bg/') && !out.includes(p)) out.push(p); });
   return out;
 }
 /* 工具栏背景按钮：缩略图 + 文件名 + 缺失标红 */
@@ -1490,6 +1545,7 @@ let seGridPop = null;
 function closeAssetGrid() { if (seGridPop) { seGridPop.remove(); seGridPop = null; } }
 function openAssetGrid(anchorEl, cfg) {
   closeAssetGrid();
+  closeSePop();
   const pop = document.createElement('div');
   pop.className = 'se-grid-pop';
   if (cfg.title) {
@@ -1503,6 +1559,7 @@ function openAssetGrid(anchorEl, cfg) {
   cfg.items.forEach(it => {
     const cell = document.createElement('div');
     cell.className = 'se-grid-cell' + (it.value === cfg.current ? ' cur' : '');
+    cell.dataset.value = it.value;
     const th = document.createElement('div');
     th.className = 'th';
     if (it.img) {
@@ -1528,6 +1585,7 @@ function openAssetGrid(anchorEl, cfg) {
   });
   pop.appendChild(grid);
   document.body.appendChild(pop);
+  seGridPop = pop; /* 登记当前弹层，closeAssetGrid 才能真正关闭 */
   const r = anchorEl.getBoundingClientRect();
   pop.style.left = Math.max(4, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8)) + 'px';
   pop.style.top = Math.max(4, Math.min(r.bottom + 4, window.innerHeight - pop.offsetHeight - 8)) + 'px';
@@ -1546,6 +1604,7 @@ function selectEditorScene(i) {
   const bgmSel = $('se-bgm-select');
   bgmSel.innerHTML = '<option value="">(无)</option>';
   script.scenes.forEach(s=>{const b=s.bgm;const p=typeof b==='object'?b.src:b;if(p){const o=document.createElement('option');o.value=p;o.textContent=p;bgmSel.appendChild(o);}});
+  Object.keys(customAssets).forEach(p=>{if(p.startsWith('bgm/')){const o=document.createElement('option');o.value=p;o.textContent=p;bgmSel.appendChild(o);}});
   if (sc.bgm) { const bsrc = typeof sc.bgm==='object'?sc.bgm.src:sc.bgm; bgmSel.value = bsrc; }
   const bgmCfg = sc.bgm && typeof sc.bgm==='object' ? sc.bgm : null;
   $('se-audio-info').textContent = sc.bgm ? `BGM${bgmCfg&&bgmCfg.start!==undefined?' ['+bgmCfg.start+'s-'+bgmCfg.end+'s]':''}${bgmCfg&&bgmCfg.volume!==undefined?' vol:'+bgmCfg.volume:''}` : '';
@@ -1554,6 +1613,7 @@ function selectEditorScene(i) {
   sfxSel.innerHTML = '<option value="">(无)</option>';
   const allSfx = new Set();
   script.scenes.forEach(s=>{(s.sfx?Array.isArray(s.sfx)?s.sfx:[s.sfx]:[]).forEach(x=>{const p=typeof x==='object'?x.src:x;if(p)allSfx.add(p);})});
+  Object.keys(customAssets).forEach(p=>{if(p.startsWith('sfx/'))allSfx.add(p);});
   allSfx.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;sfxSel.appendChild(o);});
   sfxSel.value = '';
   // Background
@@ -1687,6 +1747,7 @@ let edPreviewLine = -1; // which line the preview is showing (-1 = scene start)
 
 function renderTimeline(sc) {
   const total = (sc.script||[]).length || 1;
+  renderInsertGaps(sc);
   // Dialog track: narrate, say, choice
   const dBlocks = document.querySelector('#tl-dialog .tl-blocks'); dBlocks.innerHTML = '';
   (sc.script||[]).forEach((cmd, idx) => {
@@ -1696,6 +1757,10 @@ function renderTimeline(sc) {
     b.textContent = cmd.type==='narrate'?'📖'+(cmd.text||'').slice(0,8):cmd.type==='say'?'💬'+(script.characters[cmd.who]||{}).name:cmd.type==='choice'?'🔀'+(cmd.options||[]).length+'选':'';
     b.title = (cmd.text||'').slice(0,40);
     b.dataset.idx = idx;
+    /* 色块可拖拽：拖到「剪辑」行的空隙上即重排 */
+    b.draggable = true;
+    b.ondragstart = ev => { ev.dataTransfer.setData('text/plain', 'cmd:' + idx); b.classList.add('dragging'); };
+    b.ondragend = () => b.classList.remove('dragging');
     b.onclick = (ev) => { ev.stopPropagation(); previewLine(sc, idx); };
     b.oncontextmenu = ev => { ev.preventDefault(); sc.script.splice(idx,1); selectEditorScene(edSceneIdx); return false; };
     dBlocks.appendChild(b);
@@ -1784,6 +1849,10 @@ function renderTimeline(sc) {
     b.style.left = (idx/total*100)+'%'; b.style.width = Math.max(4, (100/total))+'%';
     b.textContent = cmd.type==='set'?'⚙'+Object.keys(cmd.vars||{}).join(','):cmd.type==='goto'?'⏭'+cmd.target:cmd.type==='end'?'🏁'+cmd.label:cmd.type==='show'?'🖼CG':cmd.type==='inspect'?'🔍':'';
     b.dataset.idx = idx;
+    /* 逻辑轨色块同样可拖拽重排 */
+    b.draggable = true;
+    b.ondragstart = ev => { ev.dataTransfer.setData('text/plain', 'cmd:' + idx); b.classList.add('dragging'); };
+    b.ondragend = () => b.classList.remove('dragging');
     b.onclick = (ev) => { ev.stopPropagation(); previewLine(sc, idx); };
     b.oncontextmenu = ev => { ev.preventDefault(); sc.script.splice(idx,1); selectEditorScene(edSceneIdx); return false; };
     oBlocks.appendChild(b);
@@ -1864,85 +1933,132 @@ function previewLine(sc, idx) {
   if (row) { row.classList.add('sel'); row.scrollIntoView({block:'nearest'}); }
 }
 
-// 键盘上下键浏览指令
+// choice 可视化编辑：选项卡片 + 目标场景/变量/条件 chip（全程不碰表达式文本）
 function buildChoiceInline(cmd) {
   var box = $('se-pv-text'); box.innerHTML = '';
   var div = document.createElement('div'); div.style.cssText = 'font-size:.85em';
-  div.innerHTML = '<b>🔀 选择</b> <span style="opacity:.5;font-size:.8em">点选项编辑 双击=完整表单</span>';
-  var ids = script.scenes.map(function(s){return s.id;});
+  div.innerHTML = '<b>🔀 选择</b> <span style="opacity:.5;font-size:.8em">点文本直接改；chip 配跳转/变量/条件；双击=高级表单</span>';
   (cmd.options||[]).forEach(function(o, i) {
-    var row = document.createElement('div'); row.style.cssText = 'display:flex;gap:4px;align-items:center;margin:3px 0;background:rgba(40,60,95,.5);border-radius:4px;padding:4px';
-    row.innerHTML = '<span style="font-size:.7em;width:20px">'+(i+1)+'.</span>';
-    var inp = document.createElement('input'); inp.value = o.text||''; inp.placeholder = '选项文本';
-    inp.style.cssText = 'flex:2;padding:3px;background:#0c1120;color:#eee;border:1px solid #5a7bb0;border-radius:3px;font-size:.8em';
-    inp.onchange = function() { o.text = this.value; };
-    var sel = document.createElement('select');
-    sel.style.cssText = 'flex:1;padding:3px;background:#0c1120;color:#eee;border:1px solid #5a7bb0;border-radius:3px;font-size:.75em';
-    sel.innerHTML = '<option value="">(无跳转)</option>';
-    ids.forEach(function(s) { var opt=document.createElement('option'); opt.value=s; opt.textContent=s; if(s===o.goto)opt.selected=true; sel.appendChild(opt); });
-    sel.onchange = function() { o.goto = this.value||undefined; };
-    var ifInp = document.createElement('input'); ifInp.value = o.if||''; ifInp.placeholder = '条件';
-    ifInp.style.cssText = 'flex:1;padding:3px;background:#0c1120;color:#ffd75e;border:1px solid #5a7bb0;border-radius:3px;font-size:.7em';
-    ifInp.onchange = function() { o.if = this.value||undefined; };
-    var setInp = document.createElement('input'); setInp.value = o.set ? JSON.stringify(o.set) : ''; setInp.placeholder = 'set(如{"favor":5})';
-    setInp.style.cssText = 'flex:1;padding:3px;background:#0c1120;color:#98FB98;border:1px solid #5a7bb0;border-radius:3px;font-size:.7em';
-    setInp.onchange = function() { try{o.set=JSON.parse(this.value)}catch(e){o.set=this.value||undefined}; };
-    var delBtn = document.createElement('button'); delBtn.textContent = '✕';
-    delBtn.style.cssText = 'color:#c44;font-size:.65em;padding:0 4px';
-    delBtn.onclick = (function(idx){return function(){cmd.options.splice(idx,1);selectEditorScene(edSceneIdx);previewLine(script.scenes[edSceneIdx],edPreviewLine);};})(i);
-    row.appendChild(inp); row.appendChild(sel); row.appendChild(ifInp); row.appendChild(setInp);
+    var row = document.createElement('div'); row.className = 'opt-card';
+    var num = document.createElement('span'); num.style.cssText = 'font-size:.7em;width:16px;opacity:.6'; num.textContent = (i+1)+'.';
+    var inp = document.createElement('input'); inp.className = 'opt-text'; inp.value = o.text||''; inp.placeholder = '选项文本';
+    inp.onchange = function() { o.text = this.value; renderTimeline(script.scenes[edSceneIdx]); };
+    /* →目标场景 chip：弹场景缩略图网格 */
+    var gotoChip = document.createElement('span');
+    gotoChip.className = 'opt-chip goto' + (o.goto ? '' : ' empty');
+    gotoChip.textContent = o.goto ? '→ ' + o.goto : '→ 下一句';
+    gotoChip.title = '点击选择目标场景（缩略图网格）';
+    gotoChip.onclick = function(ev) {
+      ev.stopPropagation();
+      openAssetGrid(gotoChip, { title:'选择跳转目标场景', items: sceneGridItems(true), current:o.goto||'',
+        onPick: function(v) { o.goto = v || undefined; previewLine(script.scenes[edSceneIdx], edPreviewLine); renderTimeline(script.scenes[edSceneIdx]); } });
+    };
+    /* {变量} chip：弹属性行小面板（+/-/=） */
+    var setChip = document.createElement('span');
+    setChip.className = 'opt-chip set' + (o.set ? '' : ' empty');
+    setChip.textContent = o.set && Object.keys(o.set).length ? '{' + Object.keys(o.set).join(',') + '}' : '{变量}';
+    setChip.title = '点击配置选中后执行的变量修改';
+    setChip.onclick = function(ev) { ev.stopPropagation(); openSetEditor(setChip, o, function() { previewLine(script.scenes[edSceneIdx], edPreviewLine); }); };
+    /* [条件] chip：弹条件构造器（属性 比较符 数值，且/或 双条件） */
+    var ifChip = document.createElement('span');
+    ifChip.className = 'opt-chip cond' + (o.if ? '' : ' empty');
+    ifChip.textContent = o.if ? '[' + o.if + ']' : '[条件]';
+    ifChip.title = '点击配置该选项的可选条件';
+    ifChip.onclick = function(ev) { ev.stopPropagation(); openCondBuilder(ifChip, o.if, function(expr) { o.if = expr || undefined; previewLine(script.scenes[edSceneIdx], edPreviewLine); }); };
+    var delBtn = document.createElement('span'); delBtn.textContent = '✕'; delBtn.className = 'opt-del';
+    delBtn.onclick = function(){ cmd.options.splice(i,1); selectEditorScene(edSceneIdx); previewLine(script.scenes[edSceneIdx],edPreviewLine); };
+    row.appendChild(num); row.appendChild(inp); row.appendChild(gotoChip); row.appendChild(setChip); row.appendChild(ifChip);
     if (cmd.options.length>1) row.appendChild(delBtn);
     div.appendChild(row);
   });
   var addBtn = document.createElement('button'); addBtn.textContent = '+ 选项';
-  addBtn.style.cssText = 'font-size:.65em;padding:2px 8px';
+  addBtn.style.cssText = 'font-size:.65em;padding:2px 8px;margin-top:2px';
   addBtn.onclick = function() { cmd.options.push({text:'',goto:''}); selectEditorScene(edSceneIdx); previewLine(script.scenes[edSceneIdx],edPreviewLine); };
   div.appendChild(addBtn);
   box.appendChild(div);
 }
 
+/* 把 vars 对象解析为可视化行 [{k,op,val}]（op: = + -） */
+function parseSetRows(vars) {
+  var rows = [];
+  Object.entries(vars||{}).forEach(function(e) {
+    var k = e[0], v = e[1];
+    if (typeof v === 'string') {
+      var m = v.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*([+-])\s*(\d+(\.\d+)?)$/);
+      if (m && m[1] === k) { rows.push({ k:k, op:m[2], val:m[3] }); return; }
+      rows.push({ k:k, op:'=', val:v }); return;
+    }
+    rows.push({ k:k, op:'=', val:String(v) });
+  });
+  return rows;
+}
+/* 可视化行序列化回 vars 对象（引擎规则：增量写 "k+N" 字符串） */
+function serializeSetRows(rows) {
+  var out = {};
+  rows.forEach(function(r) {
+    if (!r.k || r.k === '__custom__') return;
+    if (r.op === '=') { var v = r.val; try { v = JSON.parse(r.val); } catch(e) {} out[r.k] = v; }
+    else out[r.k] = r.k + r.op + (parseFloat(r.val) || 0);
+  });
+  return out;
+}
+/* 属性行 UI：下拉选属性 + 操作符 + 数值（attrs 未声明的变量可自定义） */
+function buildSetRowsUI(box, rows, onChange) {
+  box.innerHTML = '';
+  var attrs = script.attrs || {};
+  rows.forEach(function(r, i) {
+    var row = document.createElement('div'); row.className = 'set-row';
+    var sel = document.createElement('select'); sel.className = 'sr-attr';
+    var keys = Object.keys(attrs);
+    if (r.k && !keys.includes(r.k) && r.k !== '__custom__') keys.push(r.k);
+    if (!keys.length) keys.push('new_var');
+    keys.forEach(function(k) { var o=document.createElement('option'); o.value=k; o.textContent=(attrs[k] ? (attrs[k].name||k) : k); if(k===r.k)o.selected=true; sel.appendChild(o); });
+    var cust=document.createElement('option'); cust.value='__custom__'; cust.textContent='✎ 自定义…';
+    if (r.k==='__custom__') cust.selected=true;
+    sel.appendChild(cust);
+    sel.onchange=function(){ if(this.value==='__custom__'){ var nk=prompt('变量名(英文小写):', ''); if(nk) r.k=nk.trim(); } else r.k=this.value; onChange(); };
+    var op=document.createElement('select'); op.className = 'sr-op';
+    [['=','= 设为'],['+','+ 加'],['-','− 减']].forEach(function(p){ var o=document.createElement('option'); o.value=p[0]; o.textContent=p[1]; if(p[0]===r.op)o.selected=true; op.appendChild(o); });
+    op.onchange=function(){ r.op=this.value; onChange(); };
+    var val=document.createElement('input'); val.className='sr-val'; val.value=r.val; val.placeholder='数值'; val.style.width='70px';
+    val.onchange=function(){ r.val=this.value; onChange(); };
+    var del=document.createElement('span'); del.textContent='✕'; del.className='opt-del';
+    del.onclick=function(){ rows.splice(i,1); onChange(); };
+    row.appendChild(sel); row.appendChild(op); row.appendChild(val); row.appendChild(del);
+    box.appendChild(row);
+  });
+}
+
 function buildSetInline(cmd) {
   var box = $('se-pv-text'); box.innerHTML = '';
   var div = document.createElement('div'); div.style.cssText = 'font-size:.85em';
-  div.innerHTML = '<b>⚙ 变量设置</b> <span style="opacity:.5;font-size:.8em">改完自动保存</span>';
+  div.innerHTML = '<b>⚙ 变量设置</b> <span style="opacity:.5;font-size:.8em">选属性 → 选操作 → 填数值，改完自动保存</span>';
+  var rows = parseSetRows(cmd.vars);
   var varsDiv = document.createElement('div'); varsDiv.style.cssText = 'margin-top:4px';
-  var rebuildVars = function() {
-    varsDiv.innerHTML = '';
-    Object.entries(cmd.vars||{}).forEach(function(e) {
-      var k = e[0], v = e[1];
-      var row = document.createElement('div'); row.style.cssText = 'display:flex;gap:4px;align-items:center;margin:2px 0';
-      var kInp = document.createElement('input'); kInp.value = k; kInp.placeholder = '变量名';
-      kInp.style.cssText = 'flex:1;padding:3px;background:#0c1120;color:#eee;border:1px solid #5a7bb0;border-radius:3px;font-size:.8em';
-      var vInp = document.createElement('input');
-      vInp.value = typeof v==='string'?v:JSON.stringify(v); vInp.placeholder = '值 (数字/字符串/+N/-N)';
-      vInp.style.cssText = 'flex:1;padding:3px;background:#0c1120;color:#98FB98;border:1px solid #5a7bb0;border-radius:3px;font-size:.8em';
-      var delBtn = document.createElement('button'); delBtn.textContent = '✕'; delBtn.style.cssText = 'color:#c44;font-size:.65em';
-      delBtn.onclick = function() { delete cmd.vars[k]; rebuildVars(); };
-      var save = function() { var nk=kInp.value||k; var nv=vInp.value; try{nv=JSON.parse(nv)}catch(e){} delete cmd.vars[k]; cmd.vars[nk]=nv; };
-      kInp.onchange = save; vInp.onchange = save;
-      row.appendChild(kInp); row.appendChild(vInp); row.appendChild(delBtn);
-      varsDiv.appendChild(row);
-    });
-    // Item buttons
-    var itemBtns = document.createElement('div'); itemBtns.style.cssText = 'margin-top:4px;display:flex;gap:3px;flex-wrap:wrap';
-    if (script.items) {
-      Object.keys(script.items).forEach(function(itemId) {
-        var b = document.createElement('button'); b.textContent = '+'+script.items[itemId].name;
-        b.style.cssText = 'font-size:.6em;padding:2px 6px';
-        b.onclick = function() {
-          cmd.vars['_additem_'+itemId] = 1;
-          selectEditorScene(edSceneIdx); previewLine(script.scenes[edSceneIdx],edPreviewLine);
-        };
-        itemBtns.appendChild(b);
-      });
-    }
-    var addBtn = document.createElement('button'); addBtn.textContent = '+ 变量';
-    addBtn.style.cssText = 'font-size:.65em;padding:2px 6px';
-    addBtn.onclick = function() { cmd.vars['new_var'] = 0; rebuildVars(); };
-    varsDiv.appendChild(itemBtns); varsDiv.appendChild(addBtn);
+  var rebuild = function() {
+    cmd.vars = serializeSetRows(rows);
+    buildSetRowsUI(varsDiv, rows, rebuild);
+    renderTimeline(script.scenes[edSceneIdx]);
   };
-  rebuildVars();
+  buildSetRowsUI(varsDiv, rows, rebuild);
   div.appendChild(varsDiv);
+  // 道具快捷按钮（保留原能力）
+  var itemBtns = document.createElement('div'); itemBtns.style.cssText = 'margin-top:4px;display:flex;gap:3px;flex-wrap:wrap';
+  if (script.items) {
+    Object.keys(script.items).forEach(function(itemId) {
+      var b = document.createElement('button'); b.textContent = '+'+script.items[itemId].name;
+      b.style.cssText = 'font-size:.6em;padding:2px 6px';
+      b.onclick = function() {
+        cmd.vars['_additem_'+itemId] = 1;
+        selectEditorScene(edSceneIdx); previewLine(script.scenes[edSceneIdx],edPreviewLine);
+      };
+      itemBtns.appendChild(b);
+    });
+  }
+  var addBtn = document.createElement('button'); addBtn.textContent = '+ 属性行';
+  addBtn.style.cssText = 'font-size:.65em;padding:2px 6px';
+  addBtn.onclick = function() { rows.push({ k:Object.keys(script.attrs||{})[0]||'new_var', op:'+', val:'1' }); rebuild(); };
+  div.appendChild(itemBtns); div.appendChild(addBtn);
   box.appendChild(div);
 }
 
@@ -1961,10 +2077,19 @@ function buildGotoInline(cmd) {
     inpIf.onchange = function(){ saveGotoInline(); };
     var arr = document.createElement('span'); arr.textContent = '→';
     var sel = document.createElement('select');
-    sel.style.cssText = 'flex:1;padding:3px;background:#0c1120;color:#eee;border:1px solid #5a7bb0;border-radius:3px;font-size:.8em';
+    sel.style.cssText = 'display:none'; /* 存储用隐藏 select，界面上用场景缩略图 chip */
     ids.forEach(function(s){ var o=document.createElement('option'); o.value=s; o.textContent=s; if(s===b.target) o.selected=true; sel.appendChild(o); });
     sel.onchange = function(){ saveGotoInline(); };
-    row.appendChild(lbl); row.appendChild(inpIf); row.appendChild(arr); row.appendChild(sel);
+    var chip = document.createElement('span');
+    chip.className = 'opt-chip goto' + (b.target ? '' : ' empty');
+    chip.style.flex = '1';
+    chip.textContent = b.target ? '→ ' + b.target : '→ 点选目标场景';
+    chip.onclick = function(ev) {
+      ev.stopPropagation();
+      openAssetGrid(chip, { title:'选择跳转目标场景', items: sceneGridItems(false), current: sel.value,
+        onPick: function(v) { sel.value = v; saveGotoInline(); previewLine(script.scenes[edSceneIdx], edPreviewLine); renderTimeline(script.scenes[edSceneIdx]); } });
+    };
+    row.appendChild(lbl); row.appendChild(inpIf); row.appendChild(arr); row.appendChild(chip); row.appendChild(sel);
     if (brs.length > 1) {
       var delBtn = document.createElement('button'); delBtn.textContent = '✕';
       delBtn.style.cssText = 'color:#c44;font-size:.65em;padding:0 4px';
@@ -2345,6 +2470,8 @@ function exportEditorJSON() {
   const json = JSON.stringify(script, null, 2);
   const blob = new Blob([json], {type:'application/json'});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'script.json'; a.click();
+  /* 有自定义素材时同时导出素材包（assets_pack.json，dataURL 数组） */
+  if (Object.keys(customAssets).length) setTimeout(exportAssetsPack, 300);
 }
 
 /* ================= 属性编辑器 ================= */
@@ -2487,6 +2614,372 @@ function quickSpriteSelect(cid, tagEl) {
       selectEditorScene(edSceneIdx);
     }
   });
+}
+
+/* ================= 剪辑式编辑扩展（插入盘/chip面板/上传素材） ================= */
+/* ---- 通用锚点小弹层 ---- */
+let sePop = null;
+function closeSePop() { if (sePop) { sePop.remove(); sePop = null; } }
+function openSePop(anchorEl, contentEl) {
+  closeSePop(); closeAssetGrid();
+  const pop = document.createElement('div');
+  pop.className = 'se-pop';
+  pop.appendChild(contentEl);
+  document.body.appendChild(pop);
+  const r = anchorEl.getBoundingClientRect();
+  pop.style.left = Math.max(4, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8)) + 'px';
+  pop.style.top = Math.max(4, Math.min(r.bottom + 4, window.innerHeight - pop.offsetHeight - 8)) + 'px';
+  pop.onclick = ev => ev.stopPropagation();
+  sePop = pop;
+  setTimeout(() => document.addEventListener('click', closeSePop, { once: true }), 0);
+  return pop;
+}
+/* ---- 场景缩略图网格 items（choice/goto chip 点选用） ---- */
+function sceneGridItems(withContinue) {
+  const items = withContinue ? [{ value:'', label:'(继续下一句)', icon:'⤵' }] : [];
+  script.scenes.forEach(s => {
+    const bg = s.background && s.background !== 'none' ? assetUrl(s.background) : null;
+    items.push({ value: s.id, label: s.id, img: bg || undefined, icon: bg ? undefined : '🎬' });
+  });
+  return items;
+}
+/* ---- 剪辑行：指令间空隙 = + 插入盘 / 拖放重排落点 ---- */
+function renderInsertGaps(sc) {
+  const wrap = document.querySelector('#tl-insert-row .tl-blocks');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  const n = (sc.script || []).length;
+  const N = Math.max(n, 1);
+  for (let i = 0; i <= n; i++) {
+    const g = document.createElement('div');
+    g.className = 'tl-gap';
+    g.dataset.gap = i;
+    g.style.left = 'calc(' + (i / N * 100) + '% - 7px)';
+    g.style.width = '14px';
+    g.title = '第 ' + i + ' 条后插入指令（或拖色块到此重排）';
+    g.onclick = ev => { ev.stopPropagation(); openCmdPalette(g, i); };
+    g.ondragover = ev => { ev.preventDefault(); g.classList.add('drop-hi'); };
+    g.ondragleave = () => g.classList.remove('drop-hi');
+    g.ondrop = ev => {
+      ev.preventDefault(); g.classList.remove('drop-hi');
+      const m = ev.dataTransfer.getData('text/plain').match(/^cmd:(\d+)$/);
+      if (!m) return;
+      const from = parseInt(m[1], 10);
+      let to = i;
+      if (from === to || from + 1 === to) return; /* 原地不动 */
+      const [moved] = sc.script.splice(from, 1);
+      if (from < to) to--;
+      sc.script.splice(to, 0, moved);
+      selectEditorScene(edSceneIdx);
+      previewLine(sc, to);
+    };
+    wrap.appendChild(g);
+  }
+}
+/* ---- 指令选择盘：选类型 → 插入 → 画布直接进入可视化编辑态 ---- */
+function openCmdPalette(anchorEl, insertAt) {
+  const types = [
+    ['💬','对白','say'], ['📖','旁白','narrate'], ['🔀','选项','choice'], ['⚙','变量','set'],
+    ['⏭','跳转','goto'], ['🏁','结局','end'], ['🖼','CG','show'], ['🔍','调查','inspect']
+  ];
+  openAssetGrid(anchorEl, {
+    title: '在第 ' + insertAt + ' 条后插入指令',
+    items: types.map(t => ({ value: t[2], label: t[1], icon: t[0] })),
+    current: '',
+    onPick: type => {
+      if (edSceneIdx < 0) return;
+      const sc = script.scenes[edSceneIdx];
+      const defaults = {
+        narrate:{type:'narrate',text:''}, say:{type:'say',who:Object.keys(script.characters)[0]||'',text:''},
+        choice:{type:'choice',options:[{text:'选项1'}]}, set:{type:'set',vars:{}},
+        goto:{type:'goto',target:''}, end:{type:'end',label:'新结局'}, show:{type:'show',image:''},
+        inspect:{type:'inspect',x:0.5,y:0.5,w:0.1,h:0.1,show:{text:''}}
+      };
+      const cmd = JSON.parse(JSON.stringify(defaults[type] || { type }));
+      sc.script.splice(insertAt, 0, cmd);
+      if (type === 'say') ensureCharInScene(sc, cmd.who, 'normal');
+      selectEditorScene(edSceneIdx);
+      previewLine(sc, insertAt);
+      if (type === 'show') openCgPickerFor(cmd, insertAt);       /* CG 直接弹素材网格选图 */
+      if (type === 'inspect') showCmdForm(sc, insertAt);          /* 调查区需框选坐标，走高级表单 */
+    }
+  });
+}
+/* CG 素材收集：剧本已引用的 + 素材库里的 cg/ */
+function collectCgAssets() {
+  const out = collectCgs();
+  Object.keys(customAssets).forEach(p => { if (p.startsWith('cg/') && !out.includes(p)) out.push(p); });
+  return out;
+}
+function openCgPickerFor(cmd, idx) {
+  openAssetGrid($('se-canvas-wrap'), {
+    title: '选择 CG 图片',
+    items: collectCgAssets().map(p => ({ value: p, label: p.split('/').pop(), img: assetUrl(p) })),
+    current: cmd.image || '',
+    onPick: v => {
+      cmd.image = v;
+      selectEditorScene(edSceneIdx);
+      previewLine(script.scenes[edSceneIdx], idx);
+    }
+  });
+}
+/* ---- choice {变量} chip 的属性行小面板 ---- */
+function openSetEditor(anchorEl, opt, onDone) {
+  const rows = parseSetRows(opt.set);
+  const box = document.createElement('div');
+  const h = document.createElement('h4'); h.textContent = '选中后修改变量';
+  box.appendChild(h);
+  const rowsDiv = document.createElement('div');
+  const save = () => {
+    opt.set = serializeSetRows(rows);
+    if (!Object.keys(opt.set).length) delete opt.set;
+  };
+  const rebuild = () => { save(); buildSetRowsUI(rowsDiv, rows, rebuild); };
+  buildSetRowsUI(rowsDiv, rows, rebuild);
+  box.appendChild(rowsDiv);
+  const add = document.createElement('button'); add.className = 'btn small'; add.textContent = '+ 属性行';
+  add.onclick = () => { rows.push({ k: Object.keys(script.attrs||{})[0] || 'new_var', op: '+', val: '1' }); rebuild(); };
+  const done = document.createElement('button'); done.className = 'btn small'; done.id = 'set-pop-done';
+  done.textContent = '完成'; done.style.marginLeft = '.5em';
+  done.onclick = () => { save(); closeSePop(); if (onDone) onDone(); };
+  box.appendChild(add); box.appendChild(done);
+  openSePop(anchorEl, box);
+}
+/* ---- [条件] chip 的条件构造器：属性 比较符 数值，且/或 双条件 ---- */
+function openCondBuilder(anchorEl, expr, onSave) {
+  const attrs = script.attrs || {};
+  const attrKeys = Object.keys(attrs);
+  let join = '&&', rows = [];
+  String(expr || '').split(/\s*(&&|\|\|)\s*/).forEach(p => {
+    if (!p) return;
+    if (p === '&&' || p === '||') { join = p; return; }
+    const m = p.match(/^\s*([A-Za-z_]\w*)\s*(>=|<=|==|!=|>|<)\s*(.+?)\s*$/);
+    if (m && rows.length < 2) rows.push({ k: m[1], op: m[2], v: m[3] });
+  });
+  if (!rows.length) rows.push({ k: attrKeys[0] || 'favor', op: '>=', v: '5' });
+  const box = document.createElement('div');
+  box.innerHTML = '<h4>条件构造器</h4>';
+  const rowsDiv = document.createElement('div');
+  function rebuild() {
+    rowsDiv.innerHTML = '';
+    rows.forEach((r, i) => {
+      if (i === 1) {
+        const j = document.createElement('span'); j.className = 'cb-join'; j.id = 'cb-join';
+        j.textContent = join === '&&' ? '且 (&&)' : '或 (||)';
+        j.title = '点击切换 且/或';
+        j.onclick = () => { join = join === '&&' ? '||' : '&&'; rebuild(); };
+        rowsDiv.appendChild(j);
+      }
+      const row = document.createElement('div'); row.className = 'cb-row';
+      const keys = attrKeys.slice();
+      if (r.k && !keys.includes(r.k)) keys.push(r.k);
+      const as = document.createElement('select'); as.className = 'cb-attr' + (i === 0 ? '' : '2');
+      if (i === 0) as.id = 'cb-attr';
+      keys.forEach(k => { const o = document.createElement('option'); o.value = k; o.textContent = attrs[k] ? (attrs[k].name || k) : k; if (k === r.k) o.selected = true; as.appendChild(o); });
+      as.onchange = () => r.k = as.value;
+      const op = document.createElement('select'); op.className = 'cb-op'; if (i === 0) op.id = 'cb-op';
+      ['>=','<=','==','!=','>','<'].forEach(o2 => { const o = document.createElement('option'); o.value = o2; o.textContent = o2; if (o2 === r.op) o.selected = true; op.appendChild(o); });
+      op.onchange = () => r.op = op.value;
+      const v = document.createElement('input'); v.className = 'cb-val'; if (i === 0) v.id = 'cb-val';
+      v.value = r.v; v.placeholder = '数值'; v.style.width = '70px';
+      v.onchange = () => r.v = v.value.trim();
+      row.appendChild(as); row.appendChild(op); row.appendChild(v);
+      if (i === 1) {
+        const del = document.createElement('span'); del.textContent = '✕'; del.className = 'opt-del';
+        del.onclick = () => { rows.pop(); rebuild(); };
+        row.appendChild(del);
+      }
+      rowsDiv.appendChild(row);
+    });
+    if (rows.length === 1) {
+      const more = document.createElement('button'); more.className = 'btn small'; more.id = 'cb-add';
+      more.textContent = '+ 第二条件（且/或）';
+      more.onclick = () => { rows.push({ k: attrKeys[0] || 'favor', op: '>=', v: '5' }); rebuild(); };
+      rowsDiv.appendChild(more);
+    }
+  }
+  rebuild();
+  box.appendChild(rowsDiv);
+  const bar = document.createElement('div'); bar.style.cssText = 'margin-top:.5em;text-align:right';
+  const clear = document.createElement('button'); clear.className = 'btn small'; clear.id = 'cb-clear'; clear.textContent = '清除条件';
+  clear.onclick = () => { closeSePop(); onSave(''); };
+  const ok = document.createElement('button'); ok.className = 'btn small'; ok.id = 'cb-save'; ok.textContent = '确定';
+  ok.style.background = '#4a6da0';
+  ok.onclick = () => {
+    const parts = rows.filter(r => r.k && r.v !== '').map(r => r.k + r.op + r.v);
+    closeSePop();
+    onSave(parts.join(join));
+  };
+  bar.appendChild(clear); bar.appendChild(ok);
+  box.appendChild(bar);
+  openSePop(anchorEl, box);
+}
+
+/* ================= 素材上传 / 命名规范 / 素材包 ================= */
+const CUSTOM_ASSETS_KEY = 'wenyou_custom_assets';
+/* 持久化整个自定义素材表；超出 localStorage 容量则只保留本会话 */
+function persistCustomAssets() {
+  try { localStorage.setItem(CUSTOM_ASSETS_KEY, JSON.stringify(customAssets)); }
+  catch (e) {
+    alert('素材库超出 localStorage 容量上限（约 5MB）。\n本次上传仅在本次会话内生效，刷新后丢失；\n请用「导出」同时导出的 assets_pack.json 备份素材。');
+  }
+}
+function loadCustomAssets() {
+  try { customAssets = JSON.parse(localStorage.getItem(CUSTOM_ASSETS_KEY) || '{}') || {}; }
+  catch (e) { customAssets = {}; }
+}
+/* 命名规范 slug：小写字母/数字/下划线，非法字符归并为下划线 */
+function slugify(name) {
+  return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
+/* 图片 canvas 重编码 WebP（背景/CG 限 1920，立绘限 1024）；音频原样 dataURL */
+function processAssetFile(file, type, cb, errCb) {
+  if (/^image\//.test(file.type)) {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const maxSide = type === 'chars' ? 1024 : 1920;
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (Math.max(w, h) > maxSide) { const r = maxSide / Math.max(w, h); w = Math.max(1, Math.round(w * r)); h = Math.max(1, Math.round(h * r)); }
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      cb(cv.toDataURL('image/webp', 0.85));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); if (errCb) errCb('图片解码失败'); };
+    img.src = url;
+  } else {
+    const r = new FileReader();
+    r.onload = () => cb(String(r.result));
+    r.onerror = () => { if (errCb) errCb('文件读取失败'); };
+    r.readAsDataURL(file);
+  }
+}
+/* 上传后立即生效：背景→当前场景背景；立绘→写入角色表情表并刷新画布 */
+function applyUploadedAsset(type, path) {
+  if (type === 'bg' && edSceneIdx >= 0) {
+    script.scenes[edSceneIdx].background = path;
+  } else if (type === 'chars') {
+    const m = path.match(/^chars\/([a-z0-9]+)_([a-z0-9_]+)\.webp$/);
+    if (m && script.characters[m[1]]) {
+      const ch = script.characters[m[1]];
+      ch.sprites = ch.sprites || {};
+      ch.sprites[m[2]] = path;
+    }
+  }
+  if (edSceneIdx >= 0) selectEditorScene(edSceneIdx);
+}
+/* 上传配置面板：类型 / 角色+表情 / slug 命名（实时规范化提示） */
+function openUploadPanel(file) {
+  const old = $('upload-panel-overlay'); if (old) old.remove();
+  const isImg = /^image\//.test(file.type);
+  const isAudio = /^audio\//.test(file.type);
+  const ov = document.createElement('div');
+  ov.className = 'overlay'; ov.id = 'upload-panel-overlay'; ov.style.zIndex = '120';
+  const panel = document.createElement('div');
+  panel.className = 'panel'; panel.id = 'upload-panel';
+  panel.style.cssText = 'min-width:min(92vw,430px);text-align:left';
+  panel.innerHTML =
+    '<h3>上传素材</h3>' +
+    '<div class="up-hint">命名规范（与文字脚本约定一致）：背景 <b>bg/&lt;slug&gt;.webp</b>，立绘 <b>chars/&lt;角色id&gt;_&lt;表情&gt;.webp</b>，' +
+    'CG <b>cg/&lt;slug&gt;.webp</b>，音频 <b>bgm|sfx/&lt;slug&gt;.&lt;原格式&gt;</b>。<br>slug 只允许小写字母、数字、下划线；图片自动重编码为 WebP。</div>' +
+    '<div class="up-row"><label>类型</label><select id="up-type">' +
+    '<option value="bg">背景</option><option value="chars">立绘</option><option value="cg">CG</option>' +
+    '<option value="bgm">BGM</option><option value="sfx">SFX</option></select>' +
+    '<span style="opacity:.6;font-size:.8em">' + file.name + '</span></div>' +
+    '<div class="up-row" id="up-char-row" style="display:none"><label>角色</label><select id="up-char"></select>' +
+    '<label>表情</label><select id="up-emo"></select></div>' +
+    '<div class="up-row" id="up-slug-row"><label>命名</label><input type="text" id="up-slug" style="width:180px">' +
+    '<span class="up-hint" id="up-slug-hint"></span></div>' +
+    (isImg ? '<div class="up-row"><img id="upload-preview" alt="预览"></div>' : '') +
+    '<div class="up-err" id="up-err"></div>' +
+    '<div style="text-align:right"><button class="btn" id="up-cancel">取消</button> ' +
+    '<button class="btn" id="up-confirm" style="background:#4a6da0">确认上传</button></div>';
+  ov.appendChild(panel);
+  document.body.appendChild(ov);
+  if (isImg) $('upload-preview').src = URL.createObjectURL(file);
+  /* 类型相关联动 */
+  const typeSel = $('up-type'), charRow = $('up-char-row'), slugRow = $('up-slug-row');
+  if (isAudio) typeSel.value = 'bgm';
+  const charSel = $('up-char'), emoSel = $('up-emo');
+  Object.keys(script.characters || {}).forEach(cid => {
+    const o = document.createElement('option'); o.value = cid; o.textContent = script.characters[cid].name + ' (' + cid + ')';
+    charSel.appendChild(o);
+  });
+  const fillEmo = () => {
+    emoSel.innerHTML = '';
+    const keys = spriteKeys(charSel.value);
+    (keys.length ? keys : ['normal','smile','angry','sad','surprise']).forEach(k => {
+      const o = document.createElement('option'); o.value = k; o.textContent = k; emoSel.appendChild(o);
+    });
+  };
+  fillEmo();
+  charSel.onchange = fillEmo;
+  const syncRows = () => {
+    const t = typeSel.value;
+    charRow.style.display = t === 'chars' ? '' : 'none';
+    slugRow.style.display = t === 'chars' ? 'none' : '';
+  };
+  typeSel.onchange = syncRows; syncRows();
+  /* slug 自动填充 + 实时规范化提示 */
+  const slugInp = $('up-slug'), slugHint = $('up-slug-hint');
+  slugInp.value = slugify(file.name.replace(/\.[^.]+$/, '')) || 'new_asset';
+  const syncSlugHint = () => {
+    const s = slugify(slugInp.value);
+    slugHint.textContent = s !== slugInp.value ? '→ 规范为 ' + s : '';
+  };
+  slugInp.oninput = syncSlugHint; syncSlugHint();
+  $('up-cancel').onclick = () => ov.remove();
+  ov.onclick = ev => { if (ev.target === ov) ov.remove(); };
+  $('up-confirm').onclick = () => {
+    const type = typeSel.value;
+    const err = $('up-err');
+    if (!isImg && !isAudio) { err.textContent = '仅支持图片或音频文件'; return; }
+    if (isAudio && (type === 'bg' || type === 'cg' || type === 'chars')) { err.textContent = '音频文件只能选 BGM / SFX'; return; }
+    if (isImg && (type === 'bgm' || type === 'sfx')) { err.textContent = '图片文件不能选 BGM / SFX'; return; }
+    let path;
+    if (type === 'chars') {
+      const cid = charSel.value;
+      if (!cid) { err.textContent = '剧本中没有角色，无法上传立绘'; return; }
+      path = 'chars/' + cid + '_' + (slugify(emoSel.value) || 'normal') + '.webp';
+    } else {
+      const slug = slugify(slugInp.value);
+      if (!slug) { err.textContent = '命名需至少包含一个小写字母或数字'; return; }
+      const ext = (type === 'bgm' || type === 'sfx')
+        ? ((file.name.match(/\.[^.]+$/) || ['.mp3'])[0].toLowerCase()) : '.webp';
+      path = type + '/' + slug + ext;
+    }
+    err.textContent = '处理中…';
+    processAssetFile(file, type, dataURL => {
+      customAssets[path] = dataURL;
+      persistCustomAssets();
+      applyUploadedAsset(type, path);
+      ov.remove();
+    }, msg => { err.textContent = msg; });
+  };
+}
+/* ---- 素材包：自定义素材 ⇄ assets_pack.json（dataURL 数组） ---- */
+function exportAssetsPack() {
+  const assets = Object.keys(customAssets).map(p => ({ path: p, dataURL: customAssets[p] }));
+  if (!assets.length) { alert('当前没有自定义素材可导出'); return; }
+  const blob = new Blob([JSON.stringify({ format: 'wenyou-assets-pack', assets }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'assets_pack.json'; a.click();
+}
+function importAssetsPack(file) {
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const pack = JSON.parse(r.result);
+      const list = pack && pack.assets;
+      if (!Array.isArray(list) || !list.length) throw new Error('素材包为空或格式不对');
+      let n = 0;
+      list.forEach(a => { if (a && a.path && a.dataURL) { customAssets[a.path] = a.dataURL; n++; } });
+      persistCustomAssets();
+      if (edSceneIdx >= 0) selectEditorScene(edSceneIdx);
+      alert('已导入素材 ' + n + ' 个');
+    } catch (e) { alert('素材包导入失败：' + e.message); }
+  };
+  r.readAsText(file);
 }
 
 /* ================= Z键/键盘 ================= */
@@ -2757,6 +3250,11 @@ function bindUI() {
   // Scene editor
   $('se-attrs').onclick = showAttrEditor;
   $('se-exit').onclick = exitEditor;
+  /* 上传素材 / 导入素材包 */
+  $('se-upload-asset').onclick = () => { const fi = $('asset-file-input'); fi.value = ''; fi.click(); };
+  $('asset-file-input').onchange = ev => { const f = ev.target.files[0]; if (f) openUploadPanel(f); ev.target.value = ''; };
+  $('se-import-pack').onclick = () => { const fi = $('pack-file-input'); fi.value = ''; fi.click(); };
+  $('pack-file-input').onchange = ev => { const f = ev.target.files[0]; if (f) importAssetsPack(f); ev.target.value = ''; };
   ['say','narrate','choice','set','goto','end'].forEach(function(t) {
     var btn = $('se-qadd-'+t); if (!btn) return;
     btn.onclick = function() {
@@ -2905,6 +3403,7 @@ const TitleFx = {
 bindUI();
 restoreSettings();
 loadScript(EMBEDDED_SCRIPT);
+loadCustomAssets();   /* 恢复上次会话上传的自定义素材（localStorage） */
 TitleFx.init();
 /* ai_gen.js 以 defer 加载，首次 refreshTitle 时 window.AutoNovel 尚不存在；
    DOMContentLoaded 时（defer 脚本已执行）重新判定一次 AI 生成入口的显隐 */

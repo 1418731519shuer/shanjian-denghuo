@@ -35,7 +35,8 @@ let src = fs.readFileSync(path.join(ROOT, 'ai_gen.js'), 'utf8');
 const EXPORT_LINE = 'window.AutoNovel = { open: open, close: close };';
 if (!src.includes(EXPORT_LINE)) throw new Error('未找到导出行，钩子替换失败');
 src = src.replace(EXPORT_LINE,
-  EXPORT_LINE + '\n  window.__test = { mapAssets, pickBackground, cleanScene, buildScenePrompt, deepCopy };');
+  EXPORT_LINE + '\n  window.__test = { mapAssets, pickBackground, cleanScene, buildScenePrompt, deepCopy,' +
+  ' buildOutlinePrompt, parseChars, QUICK_TEMPLATES, FORMAT_EXAMPLE, TS_EXAMPLE_FALLBACK, textScriptExample };');
 const sandbox = { window: {}, console };
 vm.createContext(sandbox);
 vm.runInContext(src, sandbox, { filename: 'ai_gen.js' });
@@ -190,6 +191,60 @@ function fakeChars(n) {
     }
   }
   ok(demoAllExist, '5f. tsc 内置 DEMO 编译通过，全部 sprites 文件真实存在', missing.join(','));
+}
+
+/* ---------- 6) few-shot 格式示例嵌进 prompt ---------- */
+{
+  const outline = T.buildOutlinePrompt('题材', ['c1 = 甲'], 5);
+  const scene = T.buildScenePrompt('题材', ['c1 = 甲'], { id: 'act1', scenes: [{ id: 's1' }] }, 5);
+  // 两个 prompt 都含「严格模仿」字样与示例 JSON 片段（require_else / 结局场景 id）
+  for (const [name, p] of [['outline', outline], ['scene', scene]]) {
+    ok(p.includes('严格模仿'), '6' + (name === 'outline' ? 'a' : 'b') + '. ' + name + 'Prompt 含「严格模仿」字样');
+    ok(p.includes('require_else') && p.includes('s_end_sword'),
+      '6' + (name === 'outline' ? 'c' : 'd') + '. ' + name + 'Prompt 含示例 JSON 片段（require_else / s_end_sword）');
+  }
+  // 示例本体覆盖任务要求的要素：chars 站位 / say / choice(含 if 和 set) / require+require_else / end
+  const ex = T.FORMAT_EXAMPLE.scenes;
+  const s0 = ex[0];
+  ok(s0.require && s0.require_else, '6e. 示例含 require/require_else 场景门');
+  ok(s0.chars.length >= 2 && s0.chars.every(c => c.id && c.pos), '6f. 示例含 chars 站位');
+  const opt = s0.script.find(c => c.type === 'choice').options;
+  ok(opt.some(o => o.if && o.set) && s0.script.some(c => c.type === 'say'),
+    '6g. 示例含 say + 带 if 和 set 的选项');
+  ok(ex[1].script.some(c => c.type === 'end'), '6h. 示例含 end 结局场景');
+}
+
+/* ---------- 7) 快速模板 chips 数据 ---------- */
+{
+  ok(Array.isArray(T.QUICK_TEMPLATES) && T.QUICK_TEMPLATES.length >= 3,
+    '7a. 快速模板 ≥3 个', T.QUICK_TEMPLATES.map(t => t.label).join('/'));
+  let allOk = true, detail = [];
+  for (const t of T.QUICK_TEMPLATES) {
+    if (!t.label || !t.theme || !Array.isArray(t.chars) || t.chars.length < 2) {
+      allOk = false; detail.push(t.label + ':字段不全'); continue;
+    }
+    // 每个模板能经 parseChars 产出合法 cards（id 机械分配 c1..cn）
+    const { characters, cards } = T.parseChars(t.chars);
+    const ids = Object.keys(characters);
+    if (ids.length !== t.chars.length || ids[0] !== 'c1' ||
+        !cards.every(c => /^c\d+ = .+（.+）$/.test(c))) {
+      allOk = false; detail.push(t.label + ':cards 非法 ' + JSON.stringify(cards));
+    }
+  }
+  ok(allOk, '7b. 每个模板均能产出合法 cards', detail.join(','));
+}
+
+/* ---------- 8) 「查看脚本示例」面板数据源 ---------- */
+{
+  // node 环境无 window.TextScript → 走内置精简版兜底；浏览器里则优先 tsc.js DEMO
+  const txt = T.textScriptExample();
+  ok(txt === T.TS_EXAMPLE_FALLBACK, '8a. 无 tsc.js 时回退内置精简版');
+  ok(/==场景 /.test(txt) && /::结局 /.test(txt) && /进入条件=/.test(txt),
+    '8b. 精简版示例覆盖 场景/结局/进入条件 语法');
+  // 挂个假的 window.TextScript 验证优先取 DEMO
+  sandbox.window.TextScript = { DEMO: '# 标题 假DEMO\n==场景 x\n::结局 y\n' };
+  ok(T.textScriptExample() === sandbox.window.TextScript.DEMO, '8c. 有 tsc.js 时优先用其 DEMO');
+  delete sandbox.window.TextScript;
 }
 
 console.log('------------------------------------------');

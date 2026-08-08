@@ -40,7 +40,7 @@
   const LS_KEY_PREFIX = 'autonovel_key_';         // 每个服务商的 key 分开存
   const LS_KEY_LEGACY = 'autonovel_step_key';     // 旧版阶跃 key（迁移用）
 
-  const SCENE_FIELDS = ['id', 'background', 'bgm', 'sfx', 'checkpoint', 'chars', 'script'];
+  const SCENE_FIELDS = ['id', 'background', 'bgm', 'sfx', 'checkpoint', 'require', 'require_else', 'chars', 'script'];
   const CMD_TYPES = ['narrate', 'say', 'choice', 'set', 'goto', 'inspect', 'show', 'end'];
   const CMD_FIELDS = {
     narrate: ['type', 'text', 'if'],
@@ -62,7 +62,8 @@
   const SYSTEM_JSON =
     '你是文游剧本生成器。只输出 JSON，不要 markdown 代码块，不要任何解释文字。\n' +
     '剧本 Schema 摘要：顶层 {meta, characters, assets_dir, scenes[]}；\n' +
-    'scene 字段仅允许 id/background/bgm/sfx/checkpoint/chars/script；\n' +
+    'scene 字段仅允许 id/background/bgm/sfx/checkpoint/require/require_else/chars/script；\n' +
+    'require 为进入条件表达式，不满足时跳 require_else 指定的 scene id；\n' +
     'chars[] 元素 {id, pos(left|center|right), sprite, effect(fade|slide|none)}；\n' +
     'script[] 指令仅允许 8 种：\n' +
     '  {"type":"narrate","text":...}；\n' +
@@ -76,6 +77,42 @@
     '条件字段统一叫 if，表达式支持 == != > < >= <= && || ! 和括号，未定义变量按 0。\n' +
     '变量命名规范：^[a-z][a-z0-9_]{0,31}$，前缀约定 flag_ / favor / item_。\n' +
     '素材路径只用英文小写+数字+下划线，相对 assets_dir：bg/ 背景、chars/ 立绘、cg/ CG、bgm/ 音频。';
+
+  /* ================= few-shot 格式示例 ================= */
+  // 从 scripts/demo_branch.json（tsc 编译产物）抽取压缩：1 个含站位/对白/set/
+  // 带数值条件选项/require 场景门 的正式场景 + 1 个结局场景。
+  // 嵌进大纲/逐幕 prompt，让模型「严格模仿示例的 JSON 结构与字段」，
+  // 角色 id 刻意用 c1/c2，与 parseChars 机械分配的 id 一致。
+  const FORMAT_EXAMPLE = {
+    scenes: [
+      {
+        id: 's3_test', background: 'bg/bamboo_night.jpg', bgm: 'bgm/tense.mp3',
+        checkpoint: true, require: 'xiuwei>=20 || favor>=10', require_else: 's3_fallback',
+        chars: [
+          { id: 'c1', pos: 'center', sprite: 'normal', effect: 'fade' },
+          { id: 'c2', pos: 'left', sprite: 'normal', effect: 'fade' },
+        ],
+        script: [
+          { type: 'narrate', text: '山门试炼，一剑问心。掌门端坐云台之上。' },
+          { type: 'say', who: 'c1', text: '来者，报上你的道。' },
+          { type: 'set', vars: { flag_tested: 1 } },
+          { type: 'choice', options: [
+            { text: '拔剑问天', goto: 's_end_sword', if: 'xiuwei>=25', set: { xiuwei: 'xiuwei+5' } },
+            { text: '拜入山门修行', goto: 's_end_join' },
+          ] },
+        ],
+      },
+      {
+        id: 's_end_sword', background: 'bg/bridge_sunset.jpg',
+        chars: [{ id: 'c2', pos: 'left', sprite: 'surprise', effect: 'fade' }],
+        script: [
+          { type: 'say', who: 'c2', text: '一剑……天门真的开了！' },
+          { type: 'narrate', text: '云海翻涌，霞光万道。你收剑入鞘。' },
+          { type: 'end', label: '结局·剑开天门' },
+        ],
+      },
+    ],
+  };
 
   /* ================= 素材库硬编码匹配表（对应 demo_gl/assets） ================= */
   // 背景：关键词 → assets/bg 下的现有文件（命中多的胜出）
@@ -272,7 +309,9 @@
       '"scenes": [{"id": "s1_xxx", "summary": "...", ' +
       '"background": "bg/xxx.jpg", "chars": ["c1"], "checkpoint": true}], ' +
       '"flags_introduced": ["flag_xxx"]}], ' +
-      '"endings": [{"label": "结局·...", "condition": "favor>=3"}]}'
+      '"endings": [{"label": "结局·...", "condition": "favor>=3"}]}' +
+      '\n\n格式示例（scene 的 JSON 结构请严格模仿示例的字段与写法，只换内容）：\n' +
+      JSON.stringify(FORMAT_EXAMPLE)
     );
   }
 
@@ -290,7 +329,10 @@
       '若本幕是最后一幕，必须包含至少一个这样的结局场景（多结局就多个）。' +
       '每个 scene 的 chars 必须列出本场景所有出场角色（元素含 id 和 pos，pos 取 left|center|right），' +
       'chars 为空或漏人，该角色就不会显示；script 中每条 say 的 who 必须已列入该 scene 的 chars。' +
-      'background 用 bg/英文小写名.jpg；checkpoint 场景应为剧情关键节点。'
+      'background 用 bg/英文小写名.jpg；checkpoint 场景应为剧情关键节点。' +
+      '\n\n格式示例（严格模仿示例的 JSON 结构与字段，只换内容；' +
+      'require/require_else、带 if 和 set 的选项、end 结局的写法均照此）：\n' +
+      JSON.stringify(FORMAT_EXAMPLE)
     );
   }
 
@@ -698,6 +740,69 @@
     };
   }
 
+  /* ================= 快速模板 / 脚本示例 ================= */
+  // 生成表单的「快速模板」chips：选中自动填题材 + 角色卡（用户可再改）
+  const QUICK_TEMPLATES = [
+    { label: '古风言情', theme: '江南水乡灯会重逢旧人',
+      chars: [{ name: '苏璃', desc: '活泼灯匠少女' },
+              { name: '沈青', desc: '冷峻寡言女剑客' },
+              { name: '阿棠', desc: '温柔茶娘' }] },
+    { label: '修仙悬疑', theme: '修仙山门悬案',
+      chars: [{ name: '凌霜', desc: '冷静执剑大师姐' },
+              { name: '莫凡', desc: '圆滑机灵小师弟' },
+              { name: '玄一道长', desc: '深藏不露的掌门' }] },
+    { label: '都市日常', theme: '深夜便利店奇遇',
+      chars: [{ name: '小满', desc: '热心肠夜班店员' },
+              { name: '老周', desc: '神秘的熟客大叔' }] },
+  ];
+
+  // 「查看脚本示例」面板的兜底数据：优先用 window.TextScript.DEMO（tsc.js 内置示例），
+  // 页面没引入 tsc.js 时用这份精简版（语法与 scripts/demo_branch.txt 一致）
+  const TS_EXAMPLE_FALLBACK =
+`// 文字脚本示例（精简版，完整版见 scripts/demo_branch.txt）
+# 标题 灯下问仙
+# 作者 文游工坊
+
+@角色 su 苏璃 #FFB6C1 立绘=su
+@角色 mo 莫师兄 #98FB98 立绘=mo
+
+%属性 favor 苏璃好感 0 0 100 #FFB6C1
+%属性 xiuwei 修为 0 0 100 #87CEEB
+
+==场景 s1_town 背景=town_day 音乐=town_day 存档点
+@su normal center
+你回到灯溪镇那天，风里都是灯油的味道。
+苏璃(微笑): 阿灯！你总算回来啦！
+?
+> 陪苏璃放灯 {favor+6} -> s2_test
+> 直接闯山门 [xiuwei>=20] -> s2_test
+
+==场景 s2_test 背景=bamboo_night 音乐=tense 进入条件="xiuwei>=20 || favor>=10" 条件跳转=s2_fallback
+@mo normal left
+莫师兄: 来者，报上你的道。
+?
+> 拔剑问天 [xiuwei>=25] -> s_end_sword
+> 拜入山门 -> s_end_join
+
+==场景 s2_fallback 背景=teashelter_night
+试炼落第，山脚下的茶棚还亮着一盏。
+::结局 归隐茶棚
+
+==场景 s_end_sword 背景=bridge_sunset
+@mo surprise left
+莫师兄(惊讶): 一剑……天门真的开了！
+::结局 剑开天门
+
+==场景 s_end_join 背景=town_day
+山门晨钟暮鼓，从此青灯相伴。
+::结局 青灯问道`;
+
+  // 示例面板数据源：有 tsc.js 用其 DEMO，否则用内置精简版
+  function textScriptExample() {
+    return (typeof window !== 'undefined' && window.TextScript && window.TextScript.DEMO)
+      || TS_EXAMPLE_FALLBACK;
+  }
+
   /* ================= UI：样式注入 ================= */
   function injectCss() {
     if ($('an-style')) return;
@@ -734,6 +839,17 @@
 .an-stream { color:#9ab; font-size:.8em; opacity:.8; border-top:1px dashed #2a3a55;
   margin-top:.5em; padding-top:.5em; max-height:12vh; overflow:auto; }
 .an-hidden { display:none !important; }
+.an-chip { display:inline-block; margin:.2em .4em .2em 0; padding:.25em .9em;
+  background:#1a2740; border:1px solid #5a7bb0; border-radius:1em; cursor:pointer;
+  font-size:.88em; color:#cfe0ff; }
+.an-chip:hover { background:#33497a; }
+.an-example { margin:.3em 0; }
+.an-example summary { cursor:pointer; color:#9fc0ff; }
+.an-example pre { background:#0a0e18; border:1px solid #2a3a55; border-radius:.4em;
+  padding:.7em .9em; max-height:30vh; overflow:auto; font-size:.8em;
+  white-space:pre-wrap; line-height:1.5; }
+.an-stats { background:#10241a; border:1px solid #2e5a40; border-radius:.4em;
+  padding:.5em .9em; margin-top:.8em; font-size:.9em; color:#8fd18f; }
 `;
     document.head.appendChild(style);
   }
@@ -775,6 +891,10 @@
   <h2>✍ AI 写新故事</h2>
   <div id="an-form">
     <div class="an-row">
+      <label>快速模板（点一下自动填好，可再改）</label>
+      <div id="an-templates"></div>
+    </div>
+    <div class="an-row">
       <label>题材（一句话）</label>
       <input type="text" id="an-theme" maxlength="60" placeholder="例：修仙山门悬案 / 深夜便利店奇遇">
     </div>
@@ -786,6 +906,14 @@
     <div class="an-row">
       <label>场景数（3-8）</label>
       <input type="number" id="an-scenes" min="3" max="8" value="5" style="width:6em">
+    </div>
+    <div class="an-row an-example">
+      <details id="an-example-details">
+        <summary>📜 查看脚本示例</summary>
+        <div class="an-hint" style="margin:.4em 0">这就是生成结果的格式（文字脚本，与剧本 JSON 一一对应）。
+          生成完成后可下载 JSON，并用文字脚本格式继续改剧情。</div>
+        <pre id="an-example-text"></pre>
+      </details>
     </div>
     <div class="an-row">
       <label>服务商</label>
@@ -815,6 +943,10 @@
   </div>
   <div id="an-done" class="an-hidden">
     <div class="an-log" id="an-done-log" style="max-height:20vh"></div>
+    <div class="an-stats" id="an-done-stats"></div>
+    <div class="an-hint" style="margin-top:.6em">「下载剧本 JSON」保存生成结果；想继续改剧情，
+      推荐用「文字脚本」格式（表单里的「查看脚本示例」就是它的样子，
+      与剧本 JSON 一一对应，标题页「文字脚本示例」可直接体验）。</div>
     <div class="an-actions">
       <button class="an-btn" id="an-play">▶ 开始游戏</button>
       <button class="an-btn" id="an-download">下载剧本 JSON</button>
@@ -835,6 +967,30 @@
     // 初始两个角色行
     addCharRow(); addCharRow();
     initProviderUI();
+    initTemplates();
+    // 「查看脚本示例」面板：优先 tsc.js 内置 DEMO，没有则用内置精简版
+    $('an-example-text').textContent = textScriptExample();
+  }
+
+  /* ================= 快速模板 chips ================= */
+  function initTemplates() {
+    const box = $('an-templates');
+    QUICK_TEMPLATES.forEach(t => {
+      const chip = document.createElement('span');
+      chip.className = 'an-chip';
+      chip.textContent = t.label;
+      chip.title = t.theme;
+      chip.onclick = () => applyTemplate(t);
+      box.appendChild(chip);
+    });
+  }
+
+  // 选中模板：填题材 + 重建角色行（用户可再改）
+  function applyTemplate(t) {
+    $('an-theme').value = t.theme;
+    const box = $('an-chars');
+    box.innerHTML = '';
+    t.chars.forEach(c => addCharRow(c.name, c.desc));
   }
 
   /* ================= 服务商选择 ================= */
@@ -1003,6 +1159,7 @@
       // 第三步：校验，失败则把错误清单喂回 LLM 修复（至多 MAX_FIX_ROUND 轮）
       log('【3/3】校验剧本 …');
       let errors = [];
+      let fixRounds = 0;   // 实际让 AI 修复过的轮数（结果面板摘要用）
       for (let round = 0; round <= MAX_FIX_ROUND; round++) {
         errors = checkCharRefs(scriptJson);
         const conn = checkConnectivity(scriptJson);
@@ -1021,6 +1178,7 @@
           }
           scriptJson = assemble(cfg.theme, characters, rebuilt);
         }
+        fixRounds++;
       }
       allWarnings.slice(0, 20).forEach(w => log('[告警] ' + w, 'an-warn'));
       if (errors.length) {
@@ -1041,6 +1199,9 @@
       doneLog.textContent = '✅ 剧本《' + cfg.theme + '》生成完成！共 ' + scriptJson.scenes.length +
         ' 个场景、' + Object.keys(scriptJson.characters).length + ' 个角色。\n' +
         '点「开始游戏」直接开玩，或「下载剧本 JSON」保存到本地。';
+      // 自检摘要行：校验/修复/清洗/素材映射统计（从上面日志提炼）
+      $('an-done-stats').textContent = '自检摘要：校验通过（AI 修复 ' + fixRounds + ' 轮 · 清洗告警 ' +
+        allWarnings.length + ' 条）· 素材映射 ' + mapLog.length + ' 条';
       showPane('done');
     } catch (e) {
       if (e.isCancel || (e.name === 'AbortError')) {
