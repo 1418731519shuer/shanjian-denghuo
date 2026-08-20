@@ -2059,6 +2059,7 @@ function openAssetGrid(anchorEl, cfg) {
   setTimeout(() => document.addEventListener('click', closeAssetGrid, { once: true }), 0);
 }
 function selectEditorScene(i) {
+  const switched = (i !== edSceneIdx);   /* 同场景重渲（增删改指令）保持当前预览行 */
   edSceneIdx = i; edCharSel = -1;
   closeAssetGrid();
   edHistPush();   /* 修改类操作几乎都会经过这里：内容有变化才入撤销栈 */
@@ -2112,7 +2113,11 @@ function selectEditorScene(i) {
   renderEditorScript(sc);
   renderTimeline(sc);
   renderCharChips(sc);
-  if ((sc.script||[]).length) previewLine(sc, 0); // auto-preview first line
+  /* 切场景预览第一行；同场景重渲保持正在编辑的行（修：加选项后预览被弹回首条） */
+  if ((sc.script||[]).length) {
+    const keep = (!switched && edPreviewLine >= 0 && edPreviewLine < sc.script.length) ? edPreviewLine : 0;
+    previewLine(sc, keep);
+  }
   setTimeout(enableInlineEdit, 100);
 }
 function renderEditorChars() {
