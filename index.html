@@ -734,11 +734,28 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
 </div>
 
 <!-- 属性编辑弹窗 -->
+<!-- 分支图覆盖层 -->
+<div id="branch-overlay" class="overlay hidden" style="z-index:96">
+  <div class="panel" style="width:94vw;max-width:1100px;height:86vh;display:flex;flex-direction:column;text-align:left">
+    <h3 style="margin:0 0 .4em">分支图 <span id="branch-stats" style="font-size:.7em;opacity:.7;font-weight:normal;margin-left:.8em"></span></h3>
+    <div id="branch-canvas" style="flex:1;overflow:hidden;position:relative;background:#0a0e18;border:1px solid #3a4a63;border-radius:6px;cursor:grab">
+      <div id="branch-world" style="position:absolute;left:0;top:0;transform-origin:0 0">
+        <svg id="branch-svg" style="position:absolute;left:0;top:0;overflow:visible"></svg>
+      </div>
+    </div>
+    <div id="branch-info" style="font-size:.75em;opacity:.85;margin:.4em 0;min-height:1.4em"></div>
+    <details style="font-size:.72em;opacity:.8"><summary>文字简表</summary><div id="branch-simple" style="max-height:140px;overflow-y:auto;line-height:1.7;padding:.3em 0"></div></details>
+    <div style="text-align:center;margin-top:.4em"><button class="btn" data-close="branch-overlay">关闭</button></div>
+  </div>
+</div>
+
 <div id="attr-editor-overlay" class="overlay hidden" style="z-index:100">
   <div class="panel" style="max-width:600px;text-align:left">
     <h3>属性管理</h3>
+    <div id="attr-undef-bar" style="margin-bottom:.3em"></div>
     <div id="attr-editor-list"></div>
     <button class="btn small" id="attr-add">+ 添加属性</button>
+    <select id="attr-tpl" class="btn small" style="background:#263652"></select>
     <br><br>
     <button class="btn" id="attr-editor-close">关闭</button>
   </div>
@@ -1599,7 +1616,7 @@ function validate(sc) {
     if (s.require_else && !ids.has(s.require_else)) warns.push(`场景 ${s.id}：require_else "${s.require_else}" 不存在`);
     (s.chars || []).forEach(c => { if (!sc.characters[c.id]) warns.push(`场景 ${s.id}：角色 "${c.id}" 未定义`); });
     (s.script || []).forEach((cmd, i) => {
-      if (cmd.type === 'goto' && !ids.has(cmd.target)) warns.push(`场景 ${s.id} 第${i+1}行：goto 目标 "${cmd.target}" 不存在`);
+      if (cmd.type === 'goto' && cmd.target && !ids.has(cmd.target)) warns.push(`场景 ${s.id} 第${i+1}行：goto 目标 "${cmd.target}" 不存在`);
       if (cmd.type === 'say' && !sc.characters[cmd.who]) warns.push(`场景 ${s.id} 第${i+1}行：说话角色 "${cmd.who}" 未定义`);
       if (cmd.type === 'choice') cmd.options.forEach(o => { if (o.goto && !ids.has(o.goto)) warns.push(`场景 ${s.id} 第${i+1}行：选项 "${o.text}" 的 goto "${o.goto}" 不存在`); });
       if (cmd.type === 'check') {
@@ -1751,13 +1768,180 @@ function refreshEditorScenes() {
   // Branch graph button
   setTimeout(() => {
     const btn = box.querySelector('#se-show-branch');
-    if (btn) btn.onclick = () => {
-      const g = $('se-branch-graph');
-      if (g.style.display === 'none') { g.style.display = 'block'; g.innerHTML = buildBranchGraph(); }
-      else g.style.display = 'none';
-    };
+    if (btn) btn.onclick = openBranchGraph;
   }, 0);
 }
+/* ================= 分支图（可视化节点连线图） ================= */
+/* 节点=场景卡（缩略图/id/标记），边=跳转（choice/goto/require_else/check），分层布局+拖拽平移+滚轮缩放 */
+function openBranchGraph() {
+  $('branch-overlay').classList.remove('hidden');
+  renderBranchGraph();
+}
+function renderBranchGraph() {
+  const scenes = script.scenes;
+  const ids = new Set(scenes.map(s => s.id));
+  const idxOf = {}; scenes.forEach((s, i) => idxOf[s.id] = i);
+
+  /* 收集边：{from, to, label, kind, si, li}  kind: choice/goto/require/check-ok/check-fail */
+  const edges = [];
+  const ghosts = new Set();
+  scenes.forEach((s, si) => {
+    const addEdge = (to, label, kind, li) => {
+      if (!to) return;
+      if (!ids.has(to)) ghosts.add(to);
+      edges.push({ from: s.id, to, label, kind, si, li });
+    };
+    if (s.require_else) addEdge(s.require_else, '条件不满足', 'require', -1);
+    (s.script || []).forEach((c, li) => {
+      if (c.type === 'goto') addEdge(c.target, '跳转', 'goto', li);
+      if (c.type === 'choice') (c.options || []).forEach(o =>
+        addEdge(o.goto, (o.text || '').slice(0, 8) + (o.if ? ' [' + o.if + ']' : ''), 'choice', li));
+      if (c.type === 'check') {
+        if (c.success && c.success.goto) addEdge(c.success.goto, '✓判定成功', 'check-ok', li);
+        if (c.fail && c.fail.goto) addEdge(c.fail.goto, '✗判定失败', 'check-fail', li);
+      }
+    });
+  });
+
+  /* 结局场景标记 */
+  const endScenes = new Set();
+  scenes.forEach(s => (s.script || []).forEach(c => { if (c.type === 'end') endScenes.add(s.id); }));
+
+  /* 分层布局：从首个场景 BFS 深度为列，层内纵排；不可达场景排在最后一列并标灰 */
+  const depth = {}; depth[scenes[0].id] = 0;
+  const adj = {};
+  edges.forEach(e => { if (ids.has(e.to)) (adj[e.from] = adj[e.from] || []).push(e.to); });
+  /* require 校验失败时会自动落入下一场景（引擎 enterScene 行为），这也是通路 */
+  scenes.forEach((s, i) => { if (s.require && i + 1 < scenes.length) (adj[s.id] = adj[s.id] || []).push(scenes[i + 1].id); });
+  const queue = [scenes[0].id];
+  while (queue.length) {
+    const cur = queue.shift();
+    (adj[cur] || []).forEach(nx => {
+      if (depth[nx] === undefined) { depth[nx] = depth[cur] + 1; queue.push(nx); }
+    });
+  }
+  const unreachable = scenes.filter(s => depth[s.id] === undefined).map(s => s.id);
+  const maxDepth = Math.max(0, ...Object.values(depth));
+  unreachable.forEach(id => depth[id] = maxDepth + 1);
+  /* 层内行号 */
+  const rowOf = {}, layerCount = {};
+  scenes.forEach(s => {
+    const d = depth[s.id];
+    rowOf[s.id] = layerCount[d] || 0;
+    layerCount[d] = (layerCount[d] || 0) + 1;
+  });
+  ghosts.forEach((g, ) => {}); /* 幽灵节点目标不存在的场景：画在源场景下一行 */
+  const NW = 170, NH = 74, GAPX = 90, GAPY = 26;
+  const pos = {};
+  scenes.forEach(s => { pos[s.id] = { x: depth[s.id] * (NW + GAPX), y: rowOf[s.id] * (NH + GAPY) }; });
+  /* 幽灵节点定位在源节点下方 */
+  const ghostPos = {};
+  let ghostSeq = 0;
+  edges.filter(e => !ids.has(e.to)).forEach(e => {
+    if (!ghostPos[e.to]) ghostPos[e.to] = { x: pos[e.from].x + NW + GAPX / 2, y: pos[e.from].y + NH + 40 + (ghostSeq++) * 30 };
+  });
+
+  const world = $('branch-world');
+  world.querySelectorAll('.br-node,.br-ghost').forEach(n => n.remove());
+  const svg = $('branch-svg');
+  const W = (maxDepth + 2) * (NW + GAPX) + 400, H = (Math.max(0, ...Object.values(layerCount)) + 1) * (NH + GAPY) + 200;
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  world.style.width = W + 'px'; world.style.height = H + 'px';
+
+  /* 画边（贝塞尔曲线 + 标签） */
+  const COLORS = { choice: '#7fa0d0', goto: '#9ab', require: '#e74c3c', 'check-ok': '#7fd07f', 'check-fail': '#d8b93a' };
+  svg.innerHTML = '<defs><marker id="br-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#7fa0d0"/></marker></defs>';
+  edges.forEach((e, ei) => {
+    const p1 = pos[e.from], p2 = ids.has(e.to) ? pos[e.to] : ghostPos[e.to];
+    if (!p1 || !p2) return;
+    const x1 = p1.x + NW, y1 = p1.y + NH / 2, x2 = p2.x, y2 = p2.y + NH / 2;
+    const mx = (x1 + x2) / 2;
+    const col = COLORS[e.kind] || '#7fa0d0';
+    const dash = (e.kind === 'require' || !ids.has(e.to)) ? ' stroke-dasharray="5,4"' : '';
+    svg.innerHTML += `<path class="br-edge" data-ei="${ei}" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}"
+      fill="none" stroke="${col}" stroke-width="1.6"${dash} marker-end="url(#br-arrow)" style="cursor:pointer">
+      <title>${e.from} 第${e.li + 1}条 → ${e.to}（${e.label}）</title></path>` +
+      (e.label ? `<text x="${mx}" y="${(y1 + y2) / 2 - 4}" fill="${col}" font-size="10" text-anchor="middle" pointer-events="none">${e.label.slice(0, 14)}</text>` : '');
+  });
+  /* 边点击：高亮 + 底部信息条显示来源 */
+  svg.querySelectorAll('.br-edge').forEach(pe => pe.addEventListener('click', () => {
+    svg.querySelectorAll('.br-edge').forEach(x => x.setAttribute('stroke-width', '1.6'));
+    pe.setAttribute('stroke-width', '3.5');
+    const e = edges[parseInt(pe.dataset.ei, 10)];
+    $('branch-info').innerHTML = `边：${e.from} 第${e.li + 1}条 → <b>${e.to}</b>（${e.kind} ${e.label}） ` +
+      (e.li >= 0 ? `<a href="javascript:void 0" id="branch-edge-jump" style="color:#ffd75e">跳到该指令</a>` : '');
+    const j = $('branch-edge-jump');
+    if (j) j.onclick = () => {
+      $('branch-overlay').classList.add('hidden');
+      selectEditorScene(e.si);
+      previewLine(script.scenes[e.si], e.li);
+    };
+  }));
+
+  /* 画节点 */
+  scenes.forEach((s, i) => {
+    const n = document.createElement('div');
+    n.className = 'br-node';
+    const isEnd = endScenes.has(s.id), noReach = unreachable.includes(s.id);
+    const bg = s.background && s.background !== 'none' ? `background:url('${assetUrl(s.background)}') center/cover` : 'background:#1a2233';
+    n.style.cssText = `position:absolute;left:${pos[s.id].x}px;top:${pos[s.id].y}px;width:${NW}px;height:${NH}px;
+      border:1px solid ${noReach ? '#666' : '#3a4a63'};border-radius:6px;overflow:hidden;cursor:pointer;
+      ${bg};opacity:${noReach ? 0.45 : 1}`;
+    n.innerHTML = `<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(5,8,15,.25),rgba(5,8,15,.88))"></div>
+      <div style="position:absolute;left:6px;right:6px;bottom:4px;font-size:11px;font-weight:bold">${s.id}
+        ${s.checkpoint ? ' ★' : ''}${isEnd ? ' 🏁' : ''}${noReach ? ' <span style="color:#d8b93a">不可达</span>' : ''}</div>`;
+    n.title = (s.script[0] && (s.script[0].text || '')).slice(0, 40);
+    n.onclick = () => {
+      world.querySelectorAll('.br-node').forEach(x => x.style.outline = '');
+      n.style.outline = '2px solid #ffd75e';
+      const chars = (s.chars || []).map(c => (script.characters[c.id] || {}).name || c.id).join('、') || '无';
+      $('branch-info').innerHTML = `<b>${s.id}</b> · 指令 ${(s.script || []).length} 条 · 出场 ${chars} · 双击进入编辑`;
+    };
+    n.ondblclick = () => {
+      $('branch-overlay').classList.add('hidden');
+      selectEditorScene(i);
+    };
+    world.appendChild(n);
+  });
+  /* 幽灵节点（悬空目标） */
+  Object.keys(ghostPos).forEach(g => {
+    const n = document.createElement('div');
+    n.className = 'br-ghost';
+    n.style.cssText = `position:absolute;left:${ghostPos[g].x}px;top:${ghostPos[g].y}px;padding:2px 8px;
+      border:1px dashed #e74c3c;border-radius:4px;color:#e74c3c;font-size:11px;background:rgba(20,10,10,.8)`;
+    n.textContent = '? ' + g;
+    n.title = '悬空引用：目标场景不存在';
+    world.appendChild(n);
+  });
+
+  /* 统计头 + 简表 */
+  const dangling = edges.filter(e => !ids.has(e.to)).length;
+  $('branch-stats').textContent = `场景 ${scenes.length} · 结局 ${endScenes.size} · 跳转 ${edges.length} · 悬空 ${dangling} · 不可达 ${unreachable.length}`;
+  $('branch-simple').innerHTML = buildBranchGraph();
+
+  /* 平移缩放（幂等绑定） */
+  const cv = $('branch-canvas');
+  if (!cv._brBound) {
+    cv._brBound = true;
+    let pan = { x: 20, y: 20 }, scale = 1, drag = null;
+    const apply = () => { world.style.transform = `translate(${pan.x}px,${pan.y}px) scale(${scale})`; };
+    apply();
+    cv.addEventListener('mousedown', ev => {
+      if (ev.target.closest('.br-node,.br-ghost,.br-edge')) return;
+      drag = { x: ev.clientX - pan.x, y: ev.clientY - pan.y };
+      cv.style.cursor = 'grabbing';
+    });
+    window.addEventListener('mousemove', ev => { if (drag) { pan = { x: ev.clientX - drag.x, y: ev.clientY - drag.y }; apply(); } });
+    window.addEventListener('mouseup', () => { drag = null; cv.style.cursor = 'grab'; });
+    cv.addEventListener('wheel', ev => {
+      ev.preventDefault();
+      scale = Math.min(1.5, Math.max(0.4, scale * (ev.deltaY < 0 ? 1.12 : 0.89)));
+      apply();
+    }, { passive: false });
+  }
+  $('branch-info').innerHTML = '点击节点看摘要 · 双击进入编辑 · 点边看来源 · 空白处拖拽平移 · 滚轮缩放';
+}
+
 function buildBranchGraph() {
   const ids = script.scenes.map(s=>s.id);
   const lines = [];
@@ -2553,7 +2737,7 @@ function buildChoiceInline(cmd) {
   });
   var addBtn = document.createElement('button'); addBtn.textContent = '+ 选项';
   addBtn.style.cssText = 'font-size:.65em;padding:2px 8px;margin-top:2px';
-  addBtn.onclick = function() { cmd.options.push({text:'',goto:''}); selectEditorScene(edSceneIdx); previewLine(script.scenes[edSceneIdx],edPreviewLine); };
+  addBtn.onclick = function() { cmd.options.push({text:'新选项'}); selectEditorScene(edSceneIdx); previewLine(script.scenes[edSceneIdx],edPreviewLine); };
   div.appendChild(addBtn);
   box.appendChild(div);
 }
@@ -3163,64 +3347,181 @@ function exportEditorJSON() {
 /* ================= 属性编辑器 ================= */
 function showAttrEditor() {
   const list = $('attr-editor-list');
-  const attrs = script.attrs || {};
-  script.attrs = attrs;
+  const attrs = script.attrs || (script.attrs = {});
   $('attr-editor-overlay').classList.remove('hidden');
+
+  /* 扫描全剧本的属性引用：set 键/值、if 表达式、check attr、choice 选项 if/set */
+  function scanRefs() {
+    const counts = {}, locs = {}, undef = {};
+    const ident = s => (String(s).match(/[A-Za-z_][A-Za-z0-9_]*/g) || []).filter(w => w !== 'true' && w !== 'false');
+    const add = (k, si, li, kind) => {
+      if (attrs[k] !== undefined) {
+        counts[k] = (counts[k] || 0) + 1;
+        (locs[k] = locs[k] || []).push({ si, li, kind });
+      } else {
+        (undef[k] = undef[k] || []).push({ si, li, kind });
+      }
+    };
+    script.scenes.forEach((s, si) => {
+      if (s.require) ident(s.require).forEach(k => add(k, si, -1, '进入条件'));
+      (s.script || []).forEach((c, li) => {
+        if (c.if) ident(c.if).forEach(k => add(k, si, li, '条件'));
+        if (c.type === 'set') Object.entries(c.vars || {}).forEach(([k, v]) => { add(k, si, li, 'set'); ident(v).forEach(x => { if (x !== k) add(x, si, li, 'set表达式'); }); });
+        if (c.type === 'check') {
+          if (c.attr) add(c.attr, si, li, '判定');
+          ['success', 'fail'].forEach(br => { const o = c[br]; if (o && o.set) Object.keys(o.set).forEach(k => add(k, si, li, '判定分支set')); });
+        }
+        if (c.type === 'choice') (c.options || []).forEach(o => {
+          if (o.if) ident(o.if).forEach(k => add(k, si, li, '选项条件'));
+          if (o.set) Object.entries(o.set).forEach(([k, v]) => { add(k, si, li, '选项set'); ident(v).forEach(x => { if (x !== k) add(x, si, li, '选项set表达式'); }); });
+        });
+      });
+    });
+    return { counts, locs, undef };
+  }
+
+  const INP = 'padding:.2em .3em;background:#0c1120;color:#eee;border:1px solid #3a4a63;font-size:.8em;border-radius:3px';
+  const ownerOpts = cur =>
+    `<option value="player" ${cur === 'player' ? 'selected' : ''}>🧑 主控</option>` +
+    Object.keys(script.characters || {}).map(cid =>
+      `<option value="${cid}" ${cur === cid ? 'selected' : ''}>❤ ${script.characters[cid].name || cid}</option>`).join('') +
+    `<option value="" ${!cur ? 'selected' : ''}>（无归属）</option>`;
+
   const renderRows = () => {
-    /* 归属下拉选项：主控 / 各角色 / 无（缺省「主控」为新建属性的默认归属） */
-    const ownerOpts = cur =>
-      `<option value="player" ${cur==='player'?'selected':''}>主控</option>` +
-      Object.keys(script.characters||{}).map(cid =>
-        `<option value="${cid}" ${cur===cid?'selected':''}>${script.characters[cid].name||cid}</option>`).join('') +
-      `<option value="" ${!cur?'selected':''}>无</option>`;
-    list.innerHTML = Object.entries(attrs).map(([key, a]) => `
-      <div style="border:1px solid #3a4a63;border-radius:4px;padding:.5em;margin:.3em 0;background:#0f1420">
-        <b>${key}</b>
-        <div style="display:flex;flex-wrap:wrap;gap:.3em;margin-top:.3em">
-          <input value="${a.name||''}" data-key="${key}" data-f="name" placeholder="显示名" style="width:80px;padding:.2em;background:#0c1120;color:#eee;border:1px solid #3a4a63;font-size:.8em">
-          <input value="${a.init||0}" data-key="${key}" data-f="init" type="number" placeholder="初始" style="width:50px;padding:.2em;background:#0c1120;color:#eee;border:1px solid #3a4a63;font-size:.8em">
-          <input value="${a.min||0}" data-key="${key}" data-f="min" type="number" placeholder="最小" style="width:50px;padding:.2em;background:#0c1120;color:#eee;border:1px solid #3a4a63;font-size:.8em">
-          <input value="${a.max||100}" data-key="${key}" data-f="max" type="number" placeholder="最大" style="width:50px;padding:.2em;background:#0c1120;color:#eee;border:1px solid #3a4a63;font-size:.8em">
-          <input value="${a.bar||''}" data-key="${key}" data-f="bar" placeholder="颜色#RRGGBB" style="width:80px;padding:.2em;background:#0c1120;color:#eee;border:1px solid #3a4a63;font-size:.8em">
-          <input value="${a.bind?Object.entries(a.bind).map(([k,v])=>k+':'+v).join(','):''}" data-key="${key}" data-f="bind" placeholder="联动(格式:key:倍率)" style="width:120px;padding:.2em;background:#0c1120;color:#eee;border:1px solid #3a4a63;font-size:.8em">
-          <select data-key="${key}" data-f="owner" title="归属" style="padding:.2em;background:#0c1120;color:#eee;border:1px solid #3a4a63;font-size:.8em">${ownerOpts(a.owner)}</select>
-          <button data-key="${key}" data-del="1" style="color:#c44;font-size:.7em">✕</button>
-        </div>
-      </div>`).join('');
-    // Wire inputs
-    list.querySelectorAll('input').forEach(inp => {
+    const { counts, locs, undef } = scanRefs();
+    /* 未定义属性警告区（一键定义补建） */
+    const undefKeys = Object.keys(undef);
+    $('attr-undef-bar').innerHTML = undefKeys.length
+      ? '<span style="color:#e74c3c">⚠ 引用了但未定义的属性：</span>' + undefKeys.map(k =>
+          `<span style="display:inline-block;margin:.15em;padding:.15em .5em;background:#3a1a1a;border:1px solid #e74c3c;border-radius:3px;font-size:.8em">${k}（${undef[k].length}处）<a href="javascript:void 0" data-defkey="${k}" style="color:#7fd07f;margin-left:.4em">+定义</a></span>`).join('')
+      : '';
+    $('attr-undef-bar').querySelectorAll('[data-defkey]').forEach(a => a.onclick = () => {
+      attrs[a.dataset.defkey] = { name: a.dataset.defkey, init: 0, min: 0, max: 100, owner: 'player' };
+      renderRows();
+    });
+
+    /* 分组：主控 → 各角色 → 无归属 */
+    const groups = [];
+    const byOwner = {};
+    Object.keys(attrs).forEach(k => { const o = attrs[k].owner || ''; (byOwner[o] = byOwner[o] || []).push(k); });
+    if (byOwner.player) groups.push({ label: '🧑 主控', keys: byOwner.player });
+    Object.keys(script.characters || {}).forEach(cid => {
+      if (byOwner[cid]) groups.push({ label: '❤ ' + (script.characters[cid].name || cid), color: script.characters[cid].color, keys: byOwner[cid] });
+    });
+    if (byOwner['']) groups.push({ label: '其它（无归属）', keys: byOwner[''] });
+
+    list.innerHTML = '';
+    groups.forEach(g => {
+      const head = document.createElement('div');
+      head.className = 'attr-group-head';
+      head.style.cssText = 'margin:.6em 0 .2em;font-weight:bold;font-size:.85em;' + (g.color ? 'color:' + g.color : '');
+      head.textContent = g.label;
+      list.appendChild(head);
+      g.keys.forEach(key => {
+        const a = attrs[key];
+        const n = counts[key] || 0;
+        const initBad = (a.min !== undefined && a.init < a.min) || (a.max !== undefined && a.init > a.max);
+        const pct = Math.round(((a.init || 0) - (a.min || 0)) / Math.max(1, (a.max || 100) - (a.min || 0)) * 100);
+        const card = document.createElement('div');
+        card.style.cssText = 'border:1px solid #3a4a63;border-radius:6px;padding:.5em .6em;margin:.3em 0;background:#0f1420';
+        card.innerHTML =
+          `<div style="display:flex;align-items:center;gap:.4em;flex-wrap:wrap">
+            <b style="font-size:.85em">${key}</b>
+            <span style="flex:0 0 auto;width:54px;height:8px;border-radius:4px;background:#222;position:relative;overflow:hidden" title="进度条预览">
+              <span style="position:absolute;inset:0;width:${pct}%;background:${a.bar || '#7fa0d0'}"></span></span>
+            ${n === 0 ? '<span style="color:#d8b93a;font-size:.72em">未使用</span>'
+                       : `<a href="javascript:void 0" data-refs="${key}" style="color:#7fa0d0;font-size:.72em">被 ${n} 处引用 ▸</a>`}
+            <span style="flex:1"></span>
+            <button data-del="${key}" style="color:#c44;font-size:.75em;background:none;border:none;cursor:pointer">✕ 删除</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:.3em;margin-top:.35em;align-items:center">
+            <input value="${a.name || ''}" data-k="${key}" data-f="name" placeholder="显示名" style="${INP};width:90px">
+            <label style="font-size:.72em;opacity:.7">初值</label><input value="${a.init ?? 0}" data-k="${key}" data-f="init" type="number" style="${INP};width:56px;${initBad ? 'border-color:#e74c3c' : ''}" title="${initBad ? '初值超出 [最小,最大] 范围！' : ''}">
+            <label style="font-size:.72em;opacity:.7">最小</label><input value="${a.min ?? 0}" data-k="${key}" data-f="min" type="number" style="${INP};width:56px">
+            <label style="font-size:.72em;opacity:.7">最大</label><input value="${a.max ?? 100}" data-k="${key}" data-f="max" type="number" style="${INP};width:56px">
+            <input type="color" value="${a.bar || '#7fa0d0'}" data-k="${key}" data-f="bar" title="进度条颜色" style="width:34px;height:26px;padding:0;background:#0c1120;border:1px solid #3a4a63">
+            <select data-k="${key}" data-f="owner" title="归属" style="${INP}">${ownerOpts(a.owner)}</select>
+          </div>
+          <div data-bindwrap="${key}" style="margin-top:.3em"></div>
+          <div data-reflist="${key}" style="display:none;margin-top:.3em;font-size:.72em;line-height:1.7;max-height:120px;overflow-y:auto"></div>`;
+        list.appendChild(card);
+        /* 联动（bind）可视化行 */
+        const bw = card.querySelector(`[data-bindwrap="${key}"]`);
+        const renderBinds = () => {
+          const entries = Object.entries(a.bind || {});
+          bw.innerHTML = '<span style="font-size:.72em;opacity:.7">联动：</span>' + entries.map(([bk, bv]) =>
+            `<span style="font-size:.72em;background:#1a2233;border:1px solid #3a4a63;border-radius:3px;padding:.1em .4em;margin-right:.25em">${bk} ×${bv} <a href="javascript:void 0" data-unbind="${bk}" style="color:#c44">✕</a></span>`).join('') +
+            `<a href="javascript:void 0" data-addbind="${key}" style="font-size:.72em;color:#7fa0d0">+加联动</a>`;
+          bw.querySelectorAll('[data-unbind]').forEach(x => x.onclick = () => { delete a.bind[x.dataset.unbind]; if (!Object.keys(a.bind).length) delete a.bind; renderBinds(); });
+          bw.querySelector('[data-addbind]').onclick = () => {
+            const others = Object.keys(attrs).filter(x => x !== key);
+            if (!others.length) return;
+            const bk = prompt('联动目标属性（' + others.join(' / ') + '）：', others[0]);
+            if (!bk || !attrs[bk]) return;
+            const bv = parseFloat(prompt('联动系数（如 0.2 表示本属性 +10 时目标 +2）：', '0.2'));
+            if (isNaN(bv)) return;
+            (a.bind = a.bind || {})[bk] = bv;
+            renderBinds();
+          };
+        };
+        renderBinds();
+        /* 引用清单（点击跳到对应场景指令） */
+        const rl = card.querySelector(`[data-reflist="${key}"]`);
+        const refsLink = card.querySelector(`[data-refs="${key}"]`);
+        if (refsLink) refsLink.onclick = () => {
+          if (rl.style.display === 'none') {
+            rl.style.display = 'block';
+            rl.innerHTML = (locs[key] || []).map(l =>
+              `<a href="javascript:void 0" data-jump="${l.si}:${l.li}" style="color:#7fa0d0;margin-right:.6em">${script.scenes[l.si].id}${l.li >= 0 ? ' 第' + (l.li + 1) + '条' : ''} · ${l.kind}</a>`).join('') || '无';
+            rl.querySelectorAll('[data-jump]').forEach(j => j.onclick = () => {
+              const [si, li] = j.dataset.jump.split(':').map(Number);
+              $('attr-editor-overlay').classList.add('hidden');
+              selectEditorScene(si);
+              if (li >= 0) previewLine(script.scenes[si], li);
+            });
+          } else { rl.style.display = 'none'; }
+        };
+      });
+    });
+
+    /* 输入接线 */
+    list.querySelectorAll('input[data-f],select[data-f]').forEach(inp => {
       inp.onchange = () => {
-        const k = inp.dataset.key, f = inp.dataset.f;
+        const k = inp.dataset.k, f = inp.dataset.f;
         if (!attrs[k]) return;
         if (f === 'name') attrs[k].name = inp.value;
-        else if (f === 'init') attrs[k].init = parseFloat(inp.value)||0;
-        else if (f === 'min') attrs[k].min = parseFloat(inp.value)||0;
-        else if (f === 'max') attrs[k].max = parseFloat(inp.value)||100;
+        else if (f === 'init') attrs[k].init = parseFloat(inp.value) || 0;
+        else if (f === 'min') attrs[k].min = parseFloat(inp.value) || 0;
+        else if (f === 'max') attrs[k].max = parseFloat(inp.value) || 100;
         else if (f === 'bar') attrs[k].bar = inp.value || undefined;
-        else if (f === 'bind') {
-          const bind = {};
-          if (inp.value.trim()) inp.value.split(',').forEach(p => { const [bk,bv]=p.split(':'); if(bk&&bv) bind[bk.trim()]=parseFloat(bv); });
-          attrs[k].bind = Object.keys(bind).length ? bind : undefined;
-        }
+        else if (f === 'owner') { if (inp.value) attrs[k].owner = inp.value; else delete attrs[k].owner; }
+        if (f !== 'name') renderRows();
       };
     });
-    // Wire owner selects
-    list.querySelectorAll('select[data-f="owner"]').forEach(sel => {
-      sel.onchange = () => {
-        const k = sel.dataset.key;
-        if (!attrs[k]) return;
-        if (sel.value) attrs[k].owner = sel.value;
-        else delete attrs[k].owner;   /* 无 owner = 旧行为 */
-      };
-    });
-    // Wire delete buttons
-    list.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { delete attrs[b.dataset.key]; renderRows(); });
+    list.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { delete attrs[b.dataset.del]; renderRows(); });
   };
   renderRows();
+
   $('attr-add').onclick = () => {
     const key = prompt('属性ID (英文, 如 gold):');
     if (!key) return;
-    attrs[key] = { name: key, init: 0, min: 0, max: 100, owner: 'player' };  /* 新建默认归属主控 */
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) { alert('ID 只能含字母、数字、下划线，且不以数字开头'); return; }
+    if (attrs[key]) { alert('属性「' + key + '」已存在'); return; }
+    attrs[key] = { name: key, init: 0, min: 0, max: 100, owner: 'player' };
+    renderRows();
+  };
+  /* 常用模板：主控四维 + 各角色好感 */
+  const tpl = $('attr-tpl');
+  tpl.innerHTML = '<option value="">+ 常用属性模板…</option>' +
+    [['hp', '体力'], ['gold', '金钱'], ['charm', '魅力'], ['wisdom', '智慧']].map(x => `<option value="player:${x[0]}:${x[1]}">🧑 ${x[1]}</option>`).join('') +
+    Object.entries(script.characters || {}).map(([cid, c]) => `<option value="${cid}:favor_${cid}:${c.name || cid}好感">❤ ${c.name || cid}好感</option>`).join('');
+  tpl.onchange = () => {
+    if (!tpl.value) return;
+    const parts = tpl.value.split(':');
+    const owner = parts[0], key = parts[1], name = parts.slice(2).join(':');
+    tpl.value = '';
+    if (attrs[key]) { alert('属性「' + key + '」已存在'); return; }
+    attrs[key] = { name, init: 0, min: 0, max: 100, bar: owner === 'player' ? '#F0E68C' : ((script.characters[owner] || {}).color || '#FFB6C1'), owner };
     renderRows();
   };
   $('attr-editor-close').onclick = () => $('attr-editor-overlay').classList.add('hidden');
@@ -4119,7 +4420,7 @@ function bindUI() {
     btn.onclick = function() {
       if (edSceneIdx<0) return;
       var sc = script.scenes[edSceneIdx];
-      var defs = {say:{type:'say',who:Object.keys(script.characters)[0]||'',text:''},narrate:{type:'narrate',text:''},choice:{type:'choice',options:[{text:'选项1',goto:''}]},set:{type:'set',vars:{}},goto:{type:'goto',target:''},end:{type:'end',label:''}};
+      var defs = {say:{type:'say',who:Object.keys(script.characters)[0]||'',text:''},narrate:{type:'narrate',text:''},choice:{type:'choice',options:[{text:'选项1'}]},set:{type:'set',vars:{}},goto:{type:'goto'},end:{type:'end',label:''}};
       var newCmd = defs[t]||{type:t};
       var insertAt = edPreviewLine>=0 ? edPreviewLine+1 : sc.script.length;
       sc.script.splice(insertAt, 0, newCmd);

@@ -387,6 +387,85 @@ async function main() {
     return `${target.id} → renamed_e2e → 引用同步、撤销复原`;
   });
 
+  /* ---------- 用例 g：属性管理卡片（分组/引用统计/模板/未定义警告） ---------- */
+  await runCase('g. 属性管理：分组卡片+引用统计+模板+未定义一键定义', async () => {
+    await enterEditor();
+    await click('#se-attrs');
+    await waitFor(() => ev(`!document.getElementById('attr-editor-overlay').classList.contains('hidden')`), 5000, '属性管理打开');
+    /* 分组与卡片 */
+    const groups = await ev(`document.querySelectorAll('#attr-editor-list .attr-group-head').length`);
+    const cards = await ev(`document.querySelectorAll('#attr-editor-list [data-k]').length`);
+    if (groups < 2) throw new Error('分组不足: ' + groups);
+    if (cards < 3) throw new Error('卡片字段不足: ' + cards);
+    /* 引用统计：favor_su 应被引用（主剧本有 favor_su 的 set/条件） */
+    const refLink = await ev(`(() => { const a = document.querySelector('[data-refs="favor_su"]'); return a ? a.textContent : null; })()`);
+    if (!refLink || !/被 [1-9]\d* 处引用/.test(refLink)) throw new Error('favor_su 引用统计异常: ' + refLink);
+    /* 点引用展开清单并跳转 */
+    await ev(`document.querySelector('[data-refs="favor_su"]').click()`);
+    await sleep(200);
+    const jumps = await ev(`document.querySelectorAll('[data-jump]').length`);
+    if (jumps < 1) throw new Error('引用清单为空');
+    await ev(`document.querySelector('[data-jump]').click()`);
+    await sleep(400);
+    if (!(await ev(`document.getElementById('attr-editor-overlay').classList.contains('hidden')`))) throw new Error('跳转后未关闭属性面板');
+    /* 模板添加 gold 再删除 */
+    await click('#se-attrs');
+    await waitFor(() => ev(`!document.getElementById('attr-editor-overlay').classList.contains('hidden')`), 5000, '重开属性管理');
+    await ev(`(() => { const s = document.getElementById('attr-tpl'); s.value = 'player:gold:金钱'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    await sleep(200);
+    if (!(await ev(`!!script.attrs.gold && script.attrs.gold.name === '金钱' && script.attrs.gold.owner === 'player'`))) throw new Error('模板添加 gold 失败');
+    await ev(`document.querySelector('[data-del="gold"]').click()`);
+    await sleep(200);
+    if (await ev(`!!script.attrs.gold`)) throw new Error('删除 gold 失败');
+    /* 未定义属性：页面内引用一个不存在的属性 → 警告区出现 → 一键定义 */
+    await ev(`script.scenes[0].script.push({ type: 'set', vars: { ghost_attr_e2e: 1 } })`);
+    await click('#attr-editor-close'); await sleep(200);
+    await click('#se-attrs');
+    await waitFor(() => ev(`!document.getElementById('attr-editor-overlay').classList.contains('hidden')`), 5000, '再开属性管理');
+    const undefTxt = await ev(`document.getElementById('attr-undef-bar').textContent`);
+    if (!/ghost_attr_e2e/.test(undefTxt)) throw new Error('未定义警告未出现: ' + undefTxt.slice(0, 60));
+    await ev(`document.querySelector('[data-defkey="ghost_attr_e2e"]').click()`);
+    await sleep(200);
+    if (!(await ev(`!!script.attrs.ghost_attr_e2e`))) throw new Error('一键定义失败');
+    /* 清理现场 */
+    await ev(`delete script.attrs.ghost_attr_e2e; script.scenes[0].script.pop()`);
+    await click('#attr-editor-close');
+    return '分组/统计/跳转/模板/未定义警告 全通过（favor_su ' + refLink.trim() + '）';
+  });
+
+  /* ---------- 用例 h：分支图覆盖层（节点/边/统计/不可达/双击跳转） ---------- */
+  await runCase('h. 分支图：节点=场景数、边>0、统计正确、双击跳转、不可达标记', async () => {
+    await enterEditor();
+    const nScenes = await ev(`script.scenes.length`);
+    await click('#se-show-branch');
+    await waitFor(() => ev(`!document.getElementById('branch-overlay').classList.contains('hidden')`), 5000, '分支图打开');
+    const nodes = await ev(`document.querySelectorAll('.br-node').length`);
+    if (nodes !== nScenes) throw new Error(`节点数 ${nodes} ≠ 场景数 ${nScenes}`);
+    const edges = await ev(`document.querySelectorAll('.br-edge').length`);
+    if (edges < 1) throw new Error('无边');
+    const stats = await ev(`document.getElementById('branch-stats').textContent`);
+    if (!new RegExp('场景 ' + nScenes).test(stats)) throw new Error('统计头异常: ' + stats);
+    const baseUnreach = parseInt((stats.match(/不可达 (\d+)/) || [0, '0'])[1], 10);
+    /* 双击节点跳转场景编辑 */
+    await ev(`document.querySelectorAll('.br-node')[2].dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
+    await sleep(400);
+    if (!(await ev(`document.getElementById('branch-overlay').classList.contains('hidden')`))) throw new Error('双击后未关闭分支图');
+    if ((await ev(`edSceneIdx`)) !== 2) throw new Error('双击未跳到对应场景');
+    /* 不可达场景：加一个孤立场景 → 统计 不可达 1 → 撤销复原 */
+    await ev(`script.scenes.push({ id: 'isle_e2e', script: [{ type: 'narrate', text: '孤岛' }] })`);
+    await click('#se-show-branch');
+    await sleep(400);
+    const stats2 = await ev(`document.getElementById('branch-stats').textContent`);
+    const nowUnreach = parseInt((stats2.match(/不可达 (\d+)/) || [0, '0'])[1], 10);
+    if (nowUnreach !== baseUnreach + 1) throw new Error(`不可达统计异常: 基线 ${baseUnreach} → 加孤岛后 ${nowUnreach}`);
+    const isleOpacity = await ev(`(() => { const ns = document.querySelectorAll('.br-node'); return ns[ns.length - 1].style.opacity; })()`);
+    if (isleOpacity !== '0.45') throw new Error('不可达节点未标灰: ' + isleOpacity);
+    await click('#branch-overlay [data-close]');
+    await sleep(300);
+    await ev(`script.scenes.pop(); refreshEditorScenes()`);
+    return `节点 ${nodes}、边 ${edges}、双击跳转、不可达标记 全通过`;
+  });
+
   /* ================= 汇总 ================= */
   console.log('\n================ E2E（编辑器）结果 ================');
   let pass = 0;
