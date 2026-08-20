@@ -49,7 +49,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
 
 /* 橙光式对话框：半透明渐变、无边框、safe-area 适配 */
 #dlg { position:absolute; left:0; right:0; bottom:0; height:30vh; min-height:130px;
-  background:linear-gradient(to top, rgba(6,8,14,.95) 0%, rgba(8,11,20,.82) 45%, rgba(8,11,20,.45) 75%, transparent 100%);
+  background:linear-gradient(to top, rgba(6,8,14,.97) 0%, rgba(8,11,20,.92) 45%, rgba(8,11,20,.68) 75%, rgba(8,11,20,.25) 92%, transparent 100%);
   padding:3vh 5vw calc(2.2vh + env(safe-area-inset-bottom, 0px)); cursor:pointer; z-index:10; }
 /* 悬浮名字框 */
 #namebox { position:absolute; top:-1.3em; left:6vw; padding:.28em 1.3em;
@@ -57,7 +57,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
   border:1px solid rgba(255,215,150,.35); border-radius:2em;
   box-shadow:0 3px 14px rgba(0,0,0,.55), 0 0 12px rgba(255,215,150,.18);
   font-weight:bold; font-size:clamp(14px,2.2vw,22px); letter-spacing:.08em; }
-#dlgtext { font-size:clamp(15px,2.4vw,24px); line-height:1.7; white-space:pre-wrap; }
+#dlgtext { font-size:clamp(15px,2.4vw,24px); line-height:1.7; white-space:pre-wrap;  text-shadow:0 1px 3px rgba(0,0,0,.9), 0 0 8px rgba(0,0,0,.6); }
 #dlgtext.narrate { font-style:italic; color:#cfd6e4; }
 #advance-hint { position:absolute; right:2vw; bottom:1vh; font-size:.9em; opacity:.6; animation:blink 1s infinite; }
 @keyframes blink { 50%{opacity:.15} }
@@ -126,6 +126,10 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
 
 #menubar { position:fixed; top:calc(8px + env(safe-area-inset-top, 0px)); right:calc(8px + env(safe-area-inset-right, 0px)); z-index:40; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
 #menubar .btn { min-width:44px; min-height:44px; margin:0; padding:.3em .6em; font-size:.85em; }
+@media (max-width:600px) {
+  #menubar { gap:4px; }
+  #menubar .btn { min-width:34px; min-height:34px; padding:.15em .4em; font-size:.72em; }
+}
 
 .slotgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:.6em; }
 .saveslot { border:1px solid #3a4a63; border-radius:.4em; padding:.6em; cursor:pointer; font-size:.85em; min-height:4.5em; }
@@ -793,7 +797,37 @@ let bgmPoll = null;
 
 const lsKey = k => 'wenyou_' + (script ? script.meta.title : 'x') + '_' + k;
 const getSeen = () => JSON.parse(localStorage.getItem(lsKey('seen')) || '[]');
-const markSeen = k => { const s = getSeen(); if (!s.includes(k)) { s.push(k); localStorage.setItem(lsKey('seen'), JSON.stringify(s)); } };
+const markSeen = k => { const s = getSeen(); if (!s.includes(k)) { s.push(k); localStorage.setItem(lsKey('seen'), JSON.stringify(s)); } };/* 素材路径去重：撞名自动加 _u/_u2… 后缀（内置素材也算占用，防顶替） */
+function builtinAssetTaken(p) {
+  /* 内置素材清单：当前剧本所有引用路径 */
+  if (!builtinAssetTaken._set) {
+    const s = new Set();
+    (script.scenes || []).forEach(sc => {
+      if (sc.background && sc.background !== 'none') s.add(sc.background);
+      (sc.chars || []).forEach(c => {});
+      if (sc.bgm) s.add(typeof sc.bgm === 'object' ? sc.bgm.src : sc.bgm);
+      (sc.sfx ? (Array.isArray(sc.sfx) ? sc.sfx : [sc.sfx]) : []).forEach(x => s.add(typeof x === 'object' ? x.src : x));
+      (sc.script || []).forEach(c => {
+        if (c.type === 'show' && c.image) s.add(c.image);
+        if (c.type === 'inspect' && c.show && c.show.image) s.add(c.show.image);
+      });
+    });
+    Object.values(script.characters || {}).forEach(c => Object.values(c.sprites || {}).forEach(v => { if (typeof v === 'string') s.add(v); }));
+    builtinAssetTaken._set = s;
+  }
+  return builtinAssetTaken._set.has(p);
+}
+function dedupAssetPath(p) {
+  const taken = q => (customAssets[q] !== undefined) || builtinAssetTaken(q);
+  if (!taken(p)) return p;
+  const m = p.match(/^(.*)(\.[^.]+)$/);
+  for (let i = 1; i < 20; i++) {
+    const q = m[1] + '_u' + (i > 1 ? i : '') + m[2];
+    if (!taken(q)) return q;
+  }
+  return p;
+}
+
 /* 自定义素材库：path -> dataURL（上传素材注册于此，assetUrl 优先解析） */
 let customAssets = {};
 const assetUrl = p => (customAssets[p] ? customAssets[p] : (script.assets_dir || '') + p);
@@ -2404,8 +2438,11 @@ function sceneMarks(sid) {
   return s ? (s.script || []).filter(c => c.type === 'mark').map(c => c.id) : [];
 }
 /* 跳转目标选择器：先选场景，目标场景有 ⚓锚点 时二级选落点（场景头/某锚点）；onDone('')=继续 */
-function pickJumpTarget(anchorEl, current, onDone) {
-  openAssetGrid(anchorEl, { title: '选择跳转目标场景', items: sceneGridItems(true), current: current || '',
+function pickJumpTarget(anchorEl, current, onDone, curSid) {
+  /* 本场景锚点在一级网格置顶，同场景跳转一步直达 */
+  const localMarks = curSid ? sceneMarks(curSid).map(m => ({ value: curSid + ':' + m, label: '本场景·锚点 ' + m, icon: '⚓' })) : [];
+  const items = localMarks.length ? localMarks.concat(sceneGridItems(true)) : sceneGridItems(true);
+  openAssetGrid(anchorEl, { title: '选择跳转目标场景' + (localMarks.length ? '（本场景锚点已置顶）' : ''), items, current: current || '',
     onPick: v => {
       if (!v) { onDone(''); return; }
       const marks = sceneMarks(v);
@@ -2566,7 +2603,7 @@ function renderFrameStrip(sc) {
       }
       c.onclick = ev => {
         ev.stopPropagation();
-        pickJumpTarget(c, target, v => { apply(v); selectEditorScene(edSceneIdx); previewLine(sc, idx); });
+        pickJumpTarget(c, target, v => { apply(v); selectEditorScene(edSceneIdx); previewLine(sc, idx); }, sc.id);
       };
       chips.appendChild(c);
     };
@@ -2788,7 +2825,7 @@ function buildChoiceInline(cmd) {
       ev.stopPropagation();
       pickJumpTarget(gotoChip, o.goto || '', function(v) {
         o.goto = v || undefined; previewLine(script.scenes[edSceneIdx], edPreviewLine); renderTimeline(script.scenes[edSceneIdx]);
-      });
+      }, script.scenes[edSceneIdx].id);
     };
     /* {变量} chip：弹属性行小面板（+/-/=） */
     var setChip = document.createElement('span');
@@ -3015,7 +3052,7 @@ function buildGotoInline(cmd) {
       ev.stopPropagation();
       pickJumpTarget(chip, sel.value, function(v) {
         sel.value = v; saveGotoInline(); previewLine(script.scenes[edSceneIdx], edPreviewLine); renderTimeline(script.scenes[edSceneIdx]);
-      });
+      }, script.scenes[edSceneIdx].id);
     };
     row.appendChild(lbl); row.appendChild(inpIf); row.appendChild(arr); row.appendChild(chip); row.appendChild(sel);
     if (brs.length > 1) {
@@ -4070,6 +4107,10 @@ function openUploadPanel(file) {
         ? ((file.name.match(/\.[^.]+$/) || ['.mp3'])[0].toLowerCase()) : '.webp';
       path = type + '/' + slug + ext;
     }
+    /* 与内置/已传素材撞名时自动加 _u/_u2 后缀，不顶替已有素材 */
+    const origPath = path;
+    path = dedupAssetPath(path);
+    if (path !== origPath) err.textContent = '与已有素材同名，已自动命名为 ' + path;
     err.textContent = '处理中…';
     processAssetFile(file, type, dataURL => {
       customAssets[path] = dataURL;
@@ -4251,7 +4292,17 @@ function handleKeyboard(ev) {
     if (!$('sys-menu').classList.contains('hidden')) { $('sys-menu').classList.add('hidden'); return; }
     if (inGameNow()) openSysMenu();
   }
+}/* 智能读文本：先 UTF-8（严格），失败按 GBK 解码（Windows 记事本 ANSI 保存的中文 txt） */
+function readTextSmart(file, cb) {
+  const r = new FileReader();
+  r.onload = () => {
+    const buf = r.result;
+    try { cb(new TextDecoder('utf-8', { fatal: true }).decode(buf)); }
+    catch (e) { cb(new TextDecoder('gbk').decode(buf)); }
+  };
+  r.readAsArrayBuffer(file);
 }
+
 function loadScript(sc) {
   try {
     if (!sc.meta || !Array.isArray(sc.scenes)) throw new Error('缺少 meta 或 scenes');
@@ -4400,8 +4451,9 @@ function bindUI() {
   $('btn-editor').onclick = enterEditor;
   $('script-file').onchange = ev => {
     const f = ev.target.files[0]; if (!f) return;
-    const r = new FileReader();
-    r.onload = () => {
+    readTextSmart(f, text => {
+      const r = { result: text };
+      {
       if (/\.txt$/i.test(f.name)) {
         /* 文字脚本：走浏览器版编译器（tsc.js），错误带行号中文 */
         if (!window.TextScript) { alert('文字脚本编译器（tsc.js）未加载'); return; }
@@ -4426,8 +4478,8 @@ function bindUI() {
       } else {
         try { loadScript(JSON.parse(r.result)); } catch (e) { alert('JSON 解析失败：' + e.message); }
       }
-    };
-    r.readAsText(f);
+      }
+    });
   };
   /* 文字脚本示例：零准备体验分支+数值判断（tsc.js 以 defer 加载，点击时已就绪） */
   $('btn-text-demo').onclick = () => {
