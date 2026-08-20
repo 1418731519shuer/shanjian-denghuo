@@ -680,6 +680,7 @@ let audioUnlocked = false;
 let startTime = Date.now();
 let settings = { speed:30, bgm:0.6, sfx:0.8, voice:0.7, voice_mode:'on', auto_delay:1800 };
 let curAudio = null;
+let choiceNav = null;   /* 选项键盘导航状态 {btns, sel} */
 let curVoice = null;
 let bgmPoll = null;
 
@@ -1163,7 +1164,7 @@ function run() {
       waiting = 'advance';
       const key = sceneIdx + ':' + lineIdx;
       const wasRead = getSeen().includes(key);
-      pushHistory({ narrate:true, text:interp(cmd.text) });
+      pushHistory({ narrate:true, text:interp(cmd.text), s:sceneIdx, l:lineIdx });
       markSeen(key);
       if (skipMode && !wasRead) stopSkipAuto();
       if (skipAllMode && !cmd.stop_skip) { stopVoice(); lineIdx++; run(); return; }
@@ -1182,7 +1183,7 @@ function run() {
       waiting = 'advance';
       const key = sceneIdx + ':' + lineIdx;
       const wasRead = getSeen().includes(key);
-      pushHistory({ who, text:interp(cmd.text) });
+      pushHistory({ who, text:interp(cmd.text), s:sceneIdx, l:lineIdx });
       markSeen(key);
       if (skipMode && !wasRead) stopSkipAuto();
       if (skipAllMode && !cmd.stop_skip) { stopVoice(); lineIdx++; run(); return; }
@@ -1211,6 +1212,7 @@ function run() {
         if (opt.if !== undefined && !evalIf(opt.if)) { b.classList.add('disabled'); }
         else b.onclick = ev => {
           ev.stopPropagation();
+          choiceNav = null;
           box.innerHTML = '';
           if (opt.set) applySet(opt.set);
           if (opt.goto) {
@@ -1221,6 +1223,10 @@ function run() {
         };
         box.appendChild(b);
       });
+      /* 键盘导航：数字键直选 / 方向键移动 / 回车确认 */
+      const enabled = [...box.children].filter(b => !b.classList.contains('disabled'));
+      choiceNav = enabled.length ? { btns: enabled, sel: 0 } : null;
+      if (choiceNav) choiceNav.btns[0].classList.add('kbd-sel');
       break;
     }
     case 'inspect': {
@@ -1492,6 +1498,25 @@ function refreshEditorScenes() {
       : '<div style="height:40px;background:linear-gradient(135deg,#1a2233,#3a4a63);border-radius:3px;margin-bottom:3px;opacity:.5"></div>';
     card.innerHTML = thumbHTML + `<div class="id">${sc.id}${cp}</div><div class="preview">${firstText}…</div>`;
     card.onclick = () => selectEditorScene(i);
+    /* 双击卡片改名：同步更新全剧本 goto/choice.goto/require_else 引用 */
+    card.ondblclick = ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      const oldId = sc.id;
+      const nid = prompt('重命名场景 ID（同步更新所有跳转引用）：', oldId);
+      if (!nid || nid === oldId) return;
+      if (!/^[A-Za-z0-9_\-]+$/.test(nid)) { alert('ID 只能含字母、数字、下划线、连字符'); return; }
+      if (script.scenes.some(s => s.id === nid)) { alert('ID「' + nid + '」已存在'); return; }
+      sc.id = nid;
+      script.scenes.forEach(s2 => {
+        if (s2.require_else === oldId) s2.require_else = nid;
+        (s2.script || []).forEach(c => {
+          if (c.type === 'goto' && c.target === oldId) c.target = nid;
+          if (c.type === 'choice') (c.options || []).forEach(o => { if (o.goto === oldId) o.goto = nid; });
+        });
+      });
+      refreshEditorScenes();
+      selectEditorScene(i);   /* 内部已 edHistPush，一次改名一条撤销记录 */
+    };
     card.draggable = true;
     card.ondragstart = ev => { ev.dataTransfer.setData('text/plain', String(i)); };
     card.ondragover = ev => { ev.preventDefault(); };
@@ -3064,6 +3089,23 @@ function edUpdateUndoBtns() {
   if (u) u.disabled = edHistPos <= 0;
   if (r) r.disabled = edHistPos >= edHist.length - 1;
 }
+/* 快捷键配套：删除/复制当前预览指令（复用 selectEditorScene 重渲并自动入撤销栈） */
+function edDelCmd() {
+  if (edSceneIdx < 0 || edPreviewLine < 0) return;
+  const arr = script.scenes[edSceneIdx].script;
+  if (edPreviewLine >= arr.length) return;
+  arr.splice(edPreviewLine, 1);
+  selectEditorScene(edSceneIdx);
+  if (edPreviewLine >= arr.length) edPreviewLine = arr.length - 1;
+}
+function edDupCmd() {
+  if (edSceneIdx < 0 || edPreviewLine < 0) return;
+  const arr = script.scenes[edSceneIdx].script;
+  if (edPreviewLine >= arr.length) return;
+  arr.splice(edPreviewLine + 1, 0, JSON.parse(JSON.stringify(arr[edPreviewLine])));
+  selectEditorScene(edSceneIdx);
+  edPreviewLine++;
+}
 /* 「已自动保存 ✓」淡入淡出 */
 let savedToastT = null;
 function edMarkSaved() {
@@ -3086,6 +3128,14 @@ function handleKeyboard(ev) {
   if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'TEXTAREA' || ev.target.tagName === 'SELECT') return;
   // Editor navigation
   if (!$('scene-editor').classList.contains('hidden')) {
+    if (ev.ctrlKey || ev.metaKey) {
+      const k = ev.key.toLowerCase();
+      if (k === 'z' && !ev.shiftKey) { ev.preventDefault(); edUndoDo(); return; }
+      if (k === 'y' || (k === 'z' && ev.shiftKey)) { ev.preventDefault(); edRedoDo(); return; }
+      if (k === 'd') { ev.preventDefault(); edDupCmd(); return; }
+      if (k === 's') { ev.preventDefault(); exportEditorJSON(); return; }
+    }
+    if ((ev.key === 'Delete' || ev.key === 'Backspace') && edPreviewLine >= 0) { ev.preventDefault(); edDelCmd(); return; }
     if (ev.key === 'ArrowDown') { ev.preventDefault(); navPreview(1); return; }
     if (ev.key === 'ArrowUp') { ev.preventDefault(); navPreview(-1); return; }
     if (ev.key === 'Escape') { exitEditor(); return; }
@@ -3114,6 +3164,22 @@ function handleKeyboard(ev) {
     return;
   }
   // Game shortcuts
+  if (waiting === 'choice' && choiceNav) {
+    const { btns } = choiceNav;
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      btns[choiceNav.sel].classList.remove('kbd-sel');
+      choiceNav.sel = (choiceNav.sel + (ev.key === 'ArrowDown' ? 1 : btns.length - 1)) % btns.length;
+      btns[choiceNav.sel].classList.add('kbd-sel');
+      return;
+    }
+    if (ev.key === 'Enter') { ev.preventDefault(); btns[choiceNav.sel].click(); return; }
+    if (/^[1-9]$/.test(ev.key)) {
+      const n = parseInt(ev.key, 10) - 1;
+      if (n < btns.length) { ev.preventDefault(); btns[n].click(); }
+      return;
+    }
+  }
   if (ev.key === 'z' || ev.key === 'Z') {
     ev.preventDefault();
     if (!skipAllMode && !skipMode && !autoMode) { skipAllMode = true; $('mb-skipall').style.background = '#c06040'; }
@@ -3166,12 +3232,49 @@ function inGameNow() {
   return ids.every(i => { const el = $(i); return !el || el.classList.contains('hidden'); });
 }
 /* 对话回看（侧滑抽屉） */
+/* 设置面板：文字速度实时预览打字效果 */
+let speedDemoT = null;
+function runSpeedDemo() {
+  const el = $('speed-demo'); if (!el) return;
+  const txt = '夜色渐深，灯火一点点亮起来。';
+  clearInterval(speedDemoT); el.textContent = '';
+  if (settings.speed === 0) { el.textContent = txt; return; }
+  let i = 0;
+  speedDemoT = setInterval(() => {
+    i++; el.textContent = txt.slice(0, i);
+    if (i >= txt.length) clearInterval(speedDemoT);
+  }, Math.max(settings.speed, 16));
+}
 function renderHistory() {
-  $('history-list').innerHTML = history.map(h => h.narrate
-    ? '<div class="h-narrate">' + h.text + '</div>'
-    : '<div><span class="h-who" style="color:' + ((script.characters[h.who] || {}).color || '#fff') + '">' +
-      ((script.characters[h.who] || {}).name || h.who) + '</span>' + h.text + '</div>').join('')
-    || '<div style="opacity:.5;padding:1em 0">暂无回看记录</div>';
+  $('history-list').innerHTML = history.map((h, i) => {
+    const cls = h.s !== undefined ? 'h-item' : 'h-item nojump';
+    const body = h.narrate
+      ? '<span class="h-narrate">' + h.text + '</span>'
+      : '<span class="h-who" style="color:' + ((script.characters[h.who] || {}).color || '#fff') + '">' +
+        ((script.characters[h.who] || {}).name || h.who) + '</span>' + h.text;
+    return '<div class="' + cls + '" data-i="' + i + '">' + body + '</div>';
+  }).join('') || '<div style="opacity:.5;padding:1em 0">暂无回看记录</div>';
+  /* 点击条目跳回该句重播（不清变量，只回溯演出） */
+  $('history-list').querySelectorAll('.h-item:not(.nojump)').forEach(el => {
+    el.onclick = () => jumpToHistory(history[parseInt(el.dataset.i, 10)]);
+  });
+}
+/* 回看跳回：恢复到该句的场景/行号并重播演出（bg/bgm/站位按场景头重放，变量保持现值） */
+function jumpToHistory(h) {
+  if (!h || h.s === undefined) return;
+  const sc = script.scenes[h.s];
+  if (!sc) return;
+  closeHistory();
+  stopSkipAuto(); stopVoice();
+  sceneIdx = h.s; lineIdx = h.l;
+  $('choices').innerHTML = ''; $('hotspots').innerHTML = '';
+  $('end-screen').classList.add('hidden');
+  choiceNav = null;
+  if (sc.background !== undefined) setBackground(sc.background);
+  if (sc.bgm !== undefined) { curBgm = sc.bgm; startBgm(sc.bgm); }
+  if (sc.chars !== undefined) updateChars(sc.chars);
+  waiting = null;
+  run();
 }
 function openHistory() {
   stopSkipAuto();
@@ -3281,7 +3384,7 @@ function bindUI() {
   $('mb-hist').onclick = openHistory;
   $('mb-save').onclick = () => { renderSavePanel(true); $('save-panel-title').textContent = '存档'; $('save-panel').classList.remove('hidden'); };
   $('mb-load').onclick = () => { renderSavePanel(false); $('save-panel-title').textContent = '读档'; $('save-panel').classList.remove('hidden'); };
-  $('mb-set').onclick = () => $('settings-panel').classList.remove('hidden');
+  $('mb-set').onclick = () => { $('settings-panel').classList.remove('hidden'); runSpeedDemo(); };
   /* ---- 橙光化扩展绑定 ---- */
   $('mb-menu').onclick = () => { stopSkipAuto(); openSysMenu(); };
   $('hist-close').onclick = closeHistory;
@@ -3289,7 +3392,7 @@ function bindUI() {
   $('sm-resume').onclick = () => $('sys-menu').classList.add('hidden');
   $('sm-save').onclick = () => { $('sys-menu').classList.add('hidden'); renderSavePanel(true); $('save-panel-title').textContent = '存档'; $('save-panel').classList.remove('hidden'); };
   $('sm-load').onclick = () => { $('sys-menu').classList.add('hidden'); renderSavePanel(false); $('save-panel-title').textContent = '读档'; $('save-panel').classList.remove('hidden'); };
-  $('sm-set').onclick = () => { $('sys-menu').classList.add('hidden'); $('settings-panel').classList.remove('hidden'); };
+  $('sm-set').onclick = () => { $('sys-menu').classList.add('hidden'); $('settings-panel').classList.remove('hidden'); runSpeedDemo(); };
   $('sm-hist').onclick = () => { $('sys-menu').classList.add('hidden'); openHistory(); };
   $('sm-title').onclick = () => { $('sys-menu').classList.add('hidden'); backToTitle(); };
   $('btn-gallery').onclick = () => { renderGallery(); $('gallery-screen').classList.remove('hidden'); };
@@ -3335,6 +3438,7 @@ function bindUI() {
   $('set-speed').oninput = ev => {
     settings.speed = parseInt(ev.target.value, 10);
     $('speed-label').textContent = settings.speed === 0 ? '瞬间' : settings.speed;
+    runSpeedDemo();
     persistSettings();
   };
   $('set-autodelay').oninput = ev => {
@@ -3349,6 +3453,8 @@ function bindUI() {
   // Scene editor
   $('se-attrs').onclick = showAttrEditor;
   $('se-exit').onclick = exitEditor;
+  $('se-undo').onclick = edUndoDo;
+  $('se-redo').onclick = edRedoDo;
   /* 上传素材 / 导入素材包 */
   $('se-upload-asset').onclick = () => { const fi = $('asset-file-input'); fi.value = ''; fi.click(); };
   $('asset-file-input').onchange = ev => { const f = ev.target.files[0]; if (f) openUploadPanel(f); ev.target.value = ''; };

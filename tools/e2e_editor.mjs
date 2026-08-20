@@ -322,6 +322,71 @@ async function main() {
     return `if=${ifExpr}，chip 回显「${chip}」`;
   });
 
+  /* ---------- 用例 e：撤销/重做（按钮 + Ctrl+Z/Y） ---------- */
+  await runCase('e. 撤销/重做：插入指令可撤销再重做', async () => {
+    await enterEditor();
+    const before = await ev(`script.scenes[0].script.length`);
+    /* 插入一条旁白 */
+    await click('.tl-gap[data-gap="1"]');
+    await waitFor(() => ev(`!!document.querySelector('.se-grid-pop')`), 5000, '指令选择盘');
+    await click('.se-grid-pop .se-grid-cell[data-value="narrate"]');
+    await waitFor(async () => (await ev(`script.scenes[0].script.length`)) === before + 1, 5000, '插入生效');
+    /* 按钮应可用 → Ctrl+Z 撤销 */
+    if (await ev(`document.getElementById('se-undo').disabled`)) throw new Error('撤销按钮未激活');
+    await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }))`);
+    await sleep(400);
+    const afterUndo = await ev(`script.scenes[0].script.length`);
+    if (afterUndo !== before) throw new Error(`Ctrl+Z 后指令数 ${afterUndo} ≠ ${before}`);
+    if (await ev(`document.getElementById('se-redo').disabled`)) throw new Error('重做按钮未激活');
+    /* Ctrl+Y 重做 */
+    await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'y', ctrlKey: true, bubbles: true }))`);
+    await sleep(400);
+    const afterRedo = await ev(`script.scenes[0].script.length`);
+    if (afterRedo !== before + 1) throw new Error(`Ctrl+Y 后指令数 ${afterRedo} ≠ ${before + 1}`);
+    /* 再撤销掉，保持剧本原样 */
+    await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }))`);
+    await sleep(400);
+    if ((await ev(`script.scenes[0].script.length`)) !== before) throw new Error('二次撤销未复原');
+    return `插入→撤销(${before})→重做(${before + 1})→再撤销(${before}) 全链路正确`;
+  });
+
+  /* ---------- 用例 f：场景卡片双击改名同步更新引用 ---------- */
+  await runCase('f. 场景卡片双击改名 → 全剧本引用同步', async () => {
+    await enterEditor();
+    /* 找一个被 goto 引用的场景作为改名对象 */
+    const target = await ev(`(() => {
+      const refd = new Set();
+      script.scenes.forEach(s => (s.script || []).forEach(c => {
+        if (c.type === 'goto' && c.target) refd.add(c.target);
+        if (c.type === 'choice') (c.options || []).forEach(o => o.goto && refd.add(o.goto));
+      }));
+      const idx = script.scenes.findIndex(s => refd.has(s.id));
+      return { idx, id: idx >= 0 ? script.scenes[idx].id : null };
+    })()`);
+    if (!target.id) return '剧本无 goto 引用场景，跳过（不影响功能）';
+    await ev(`window.prompt = () => 'renamed_e2e'`);
+    await ev(`document.querySelectorAll('.se-scene-card')[${target.idx}].dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
+    await sleep(400);
+    const after = await ev(`(() => {
+      const renamed = script.scenes[${target.idx}].id === 'renamed_e2e';
+      let dangling = 0;
+      const ids = new Set(script.scenes.map(s => s.id));
+      script.scenes.forEach(s => (s.script || []).forEach(c => {
+        if (c.type === 'goto' && c.target && !ids.has(c.target)) dangling++;
+        if (c.type === 'choice') (c.options || []).forEach(o => { if (o.goto && !ids.has(o.goto)) dangling++; });
+      }));
+      return { renamed, dangling };
+    })()`);
+    if (!after.renamed) throw new Error('场景未改名');
+    if (after.dangling) throw new Error('改名后存在悬空引用×' + after.dangling);
+    /* 撤销改名复原（引用一并回滚），保持剧本原样 */
+    await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }))`);
+    await sleep(400);
+    const restored = await ev(`script.scenes[${target.idx}].id`);
+    if (restored !== target.id) throw new Error('撤销后未复原: ' + restored);
+    return `${target.id} → renamed_e2e → 引用同步、撤销复原`;
+  });
+
   /* ================= 汇总 ================= */
   console.log('\n================ E2E（编辑器）结果 ================');
   let pass = 0;

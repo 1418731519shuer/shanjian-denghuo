@@ -546,6 +546,78 @@ async function main() {
     return `载入→开玩→${label}`;
   });
 
+  /* ---------- 用例 16：选项键盘导航（高亮/方向键/数字键） ---------- */
+  await runCase('16. 选项键盘导航：默认高亮首项、方向键移动、数字键直选', async () => {
+    await click('#mb-title'); await waitFor(() => visible('#title-screen'), 5000, '回标题');
+    await click('#btn-start');
+    await waitFor(() => visible('#name-input-overlay'), 5000, '命名弹窗');
+    await ev(`document.getElementById('name-input-field').value = '键盘手'`);
+    await click('#name-input-confirm');
+    await waitFor(async () => (await ev(`document.getElementById('dlgtext').textContent.length`)) > 0, 8000, '对话出现');
+    /* 推进到选项 */
+    let hit = false;
+    for (let i = 0; i < 80 && !hit; i++) {
+      const t = await ev(`(() => !!document.querySelector('#choices .choice-btn:not(.disabled)'))()`);
+      if (t) { hit = true; break; }
+      await click('#dlg'); await sleep(80);
+    }
+    if (!hit) throw new Error('80 步内未遇到选项');
+    if (!(await ev(`document.querySelector('#choices .choice-btn').classList.contains('kbd-sel')`))) throw new Error('首个可选项未默认高亮');
+    const n = await ev(`document.querySelectorAll('#choices .choice-btn:not(.disabled)').length`);
+    if (n > 1) {
+      await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))`);
+      await sleep(100);
+      const selIdx = await ev(`[...document.querySelectorAll('#choices .choice-btn')].findIndex(b => b.classList.contains('kbd-sel'))`);
+      if (selIdx !== 1) throw new Error('ArrowDown 后高亮不在第 2 项（实际 ' + selIdx + '）');
+    }
+    /* 数字键 1 直选第一项 */
+    await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true }))`);
+    await sleep(300);
+    if (await ev(`!!document.querySelector('#choices .choice-btn')`)) throw new Error('数字键选择后选项未消失');
+    return `选项×${n}，高亮/移动/直选均正常`;
+  });
+
+  /* ---------- 用例 17：回看条目点击跳回重播 ---------- */
+  await runCase('17. 回看条目点击跳回该句重播', async () => {
+    await waitFor(async () => (await ev(`document.getElementById('dlgtext').textContent.length`)) > 0, 8000, '对话出现');
+    await advanceDlg(4);
+    await click('#mb-hist');
+    if (!(await visible('#history-panel'))) throw new Error('回看面板未打开');
+    const cnt = await ev(`document.querySelectorAll('#history-list .h-item').length`);
+    if (cnt < 2) throw new Error('可跳转条目不足: ' + cnt);
+    const firstText = await ev(`document.querySelector('#history-list .h-item').textContent`).catch(() => '');
+    const first = await ev(`(() => { const h = history.find(x => x.s !== undefined); return { s: h.s, l: h.l, t: h.text.slice(0, 12) }; })()`);
+    await ev(`document.querySelector('#history-list .h-item').click()`);
+    await sleep(500);
+    const pos = await ev(`sceneIdx + ':' + lineIdx`);
+    const dlg = await ev(`document.getElementById('dlgtext').textContent`);
+    if (!pos.startsWith(first.s + ':')) throw new Error(`跳回场景不符：期望 s=${first.s}，实际 ${pos}`);
+    if (!dlg) throw new Error('跳回后对话框为空');
+    return `跳回 ${pos}，首条记录重播正常（共 ${cnt} 条）`;
+  });
+
+  /* ---------- 用例 18：设置文字速度实时预览 ---------- */
+  await runCase('18. 设置面板文字速度实时预览', async () => {
+    await click('#mb-set');
+    if (!(await visible('#settings-panel'))) throw new Error('设置面板未打开');
+    await sleep(600); /* 打开面板即播一次预览 */
+    const t1 = await ev(`document.getElementById('speed-demo').textContent.length`);
+    if (t1 < 1) throw new Error('打开设置时预览未播放');
+    await ev(`(() => { const s = document.getElementById('set-speed'); s.value = '0'; s.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await sleep(100);
+    const instant = await ev(`document.getElementById('speed-demo').textContent`);
+    if (instant.length < 5) throw new Error('速度=0 时预览未瞬间出全');
+    await ev(`(() => { const s = document.getElementById('set-speed'); s.value = '80'; s.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await sleep(150);
+    const early = await ev(`document.getElementById('speed-demo').textContent.length`);
+    await sleep(1200);
+    const later = await ev(`document.getElementById('speed-demo').textContent.length`);
+    if (!(later > early)) throw new Error(`速度=80 时预览未逐字推进（${early}→${later}）`);
+    await ev(`(() => { const s = document.getElementById('set-speed'); s.value = '25'; s.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await click('#settings-panel [data-close]');
+    return `瞬间档全显，慢速档 ${early}→${later} 逐字推进`;
+  });
+
   /* ================= 汇总 ================= */
   console.log('\n================ E2E 结果 ================');
   let pass = 0;
