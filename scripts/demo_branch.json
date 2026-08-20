@@ -78,7 +78,8 @@
         "smile": "chars/mo_smile.png",
         "angry": "chars/mo_angry.png",
         "sad": "chars/mo_sad.png",
-        "surprise": "chars/mo_surprise.png"
+        "surprise": "chars/mo_surprise.png",
+        "shy": "chars/mo_shy.png"
       }
     }
   },

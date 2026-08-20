@@ -31,8 +31,18 @@ EMO_ALIAS = {
     'angry': 'angry', '生气': 'angry', '怒': 'angry', '愤怒': 'angry',
     'sad': 'sad', '难过': 'sad', '悲伤': 'sad', '伤心': 'sad', '哭': 'sad',
     'surprise': 'surprise', '惊讶': 'surprise', '吃惊': 'surprise', '震惊': 'surprise',
+    'shy': 'shy', '害羞': 'shy', '羞涩': 'shy', '脸红': 'shy',
+}
+# 已知立绘套装的真实表情清单（与 tsc.js / ai_gen.js 一致）：五套标准 5 表情，mo 额外有 shy
+KNOWN_SETS = {
+    'su': EMOTIONS, 'shen': EMOTIONS, 'tang': EMOTIONS,
+    'mo': EMOTIONS + ('shy',), 'wan': EMOTIONS,
 }
 ASSET_PREFIX = {'背景': 'bg', '音乐': 'bgm', '音效': 'sfx', '图': 'cg'}
+# 预设站位 x 坐标（五位，y 一律 1.0；见 docs/wenyou_design.md 第四节）
+POS_X = {'far-left': 0.10, 'left': 0.28, 'center': 0.50, 'right': 0.72, 'far-right': 0.90}
+# 景别词 → scale（远 0.75 / 中 0.85 / 近 1.0），中英文皆可
+SHOT_SCALE = {'远景': 0.75, 'far': 0.75, '中景': 0.85, 'mid': 0.85, '近景': 1.0, 'close': 1.0}
 ASSET_DEFAULT_EXT = {'bg': '.jpg', 'cg': '.jpg', 'bgm': '.mp3', 'sfx': '.wav'}
 IMG_AUDIO_EXTS = {'.png', '.jpg', '.jpeg', '.webp', '.mp3', '.wav', '.ogg', '.m4a'}
 ID_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
@@ -455,19 +465,35 @@ class Compiler:
         if cid not in self.characters:
             raise CompileError(n, f'未定义的角色 "{cid}"（请先在头部用 @角色 定义）')
         entry = {'id': cid, '_line': n}
+        pos_tok = None      # 预设位：far-left/left/center/right/far-right
+        free_pos = None     # 自由位 x,y,scale
+        shot_scale = None   # 景别词 / 裸数字缩放
         for t in toks[1:]:
             emo = EMO_ALIAS.get(t)
             if emo:
                 entry['sprite'] = emo
-            elif t in ('left', 'center', 'right'):
-                entry['pos'] = t
+            elif t in POS_X:
+                pos_tok = t
+            elif t in SHOT_SCALE:
+                shot_scale = SHOT_SCALE[t]
             elif re.match(r'^\d*\.?\d+(\s*,\s*\d*\.?\d+){2}$', t):
                 x, y, scale = [float(v) for v in t.split(',')]
-                entry.update({'x': x, 'y': y, 'scale': scale})
+                free_pos = {'x': x, 'y': y, 'scale': scale}
+            elif re.match(r'^\d*\.?\d+$', t):
+                shot_scale = float(t)
             else:
-                raise CompileError(n, f'站位参数 "{t}" 无法识别（表情/left/center/right/x,y,scale）')
-        if 'pos' not in entry and 'x' not in entry:
-            entry['pos'] = 'center'
+                raise CompileError(n, f'站位参数 "{t}" 无法识别'
+                                      '（表情/far-left/left/center/right/far-right/远景/中景/近景/far/mid/close/数字缩放/x,y,scale）')
+        if free_pos and shot_scale is not None:
+            raise CompileError(n, '自由位 x,y,scale 已含缩放，不能再加景别词')
+        if free_pos:
+            entry.update(free_pos)
+        elif pos_tok in ('far-left', 'far-right') or shot_scale is not None:
+            # far-left/far-right 或带景别词：一律转自由位（三槽 pos 没有 scale）
+            entry.update({'x': POS_X[pos_tok or 'center'], 'y': 1.0,
+                          'scale': shot_scale if shot_scale is not None else 0.85})
+        else:
+            entry['pos'] = pos_tok or 'center'
         self.cur.setdefault('chars', []).append(entry)
 
     # ---------- set 变量操作 ----------
@@ -560,7 +586,7 @@ class Compiler:
                 if emo:
                     e = EMO_ALIAS.get(emo.strip())
                     if not e:
-                        raise CompileError(n, f'未知表情 "{emo}"（支持 {"、".join(EMOTIONS)} 及中文别名）')
+                        raise CompileError(n, f'未知表情 "{emo}"（支持 {"、".join(EMOTIONS)}、shy 及中文别名）')
                     cmd['sprite'] = e  # 引擎 say 不读 sprite，仅供可读性；表情通过站位体现
                     cmd.pop('sprite')
                 if cond is not None:
@@ -707,9 +733,20 @@ class Compiler:
         attrs = {aid: {'name': a['name'], 'init': num(a['init']),
                        'min': num(a['min']), 'max': num(a['max']), 'bar': a['bar']}
                  for aid, a in self.attrs.items()}
-        chars = {cid: {'name': c['name'], 'color': c['color'],
-                       'sprites': {e: f'chars/{c["prefix"]}_{e}.png' for e in EMOTIONS}}
-                 for cid, c in self.characters.items()}
+        chars = {}
+        for cid, c in self.characters.items():
+            if c['prefix'] in KNOWN_SETS:
+                # 已知套装：只生成真实存在的表情键（缺表情时引擎回退 normal，不会破图）
+                emos = KNOWN_SETS[c['prefix']]
+            else:
+                # 自定义前缀：标准 5 表情 + 站位里实际用到的额外表情（如 shy），与 tsc.js 一致
+                emos = list(EMOTIONS)
+                for sc in self.scenes:
+                    for ch in sc.get('chars', []):
+                        if ch['id'] == cid and ch.get('sprite') and ch['sprite'] not in emos:
+                            emos.append(ch['sprite'])
+            chars[cid] = {'name': c['name'], 'color': c['color'],
+                          'sprites': {e: f'chars/{c["prefix"]}_{e}.png' for e in emos}}
         scenes = []
         for sc in self.scenes:
             out = {k: v for k, v in sc.items() if not k.startswith('_')}

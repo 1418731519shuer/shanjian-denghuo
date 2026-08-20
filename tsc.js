@@ -37,6 +37,10 @@ var EMO_ALIAS = {
   shy: 'shy', '害羞': 'shy', '羞涩': 'shy', '脸红': 'shy'
 };
 var ASSET_PREFIX = { '背景': 'bg', '音乐': 'bgm', '音效': 'sfx', '图': 'cg' };
+// 预设站位 x 坐标（五位，y 一律 1.0；见 docs/wenyou_design.md 第四节）
+var POS_X = { 'far-left': 0.10, left: 0.28, center: 0.50, right: 0.72, 'far-right': 0.90 };
+// 景别词 → scale（远 0.75 / 中 0.85 / 近 1.0），中英文皆可
+var SHOT_SCALE = { '远景': 0.75, far: 0.75, '中景': 0.85, mid: 0.85, '近景': 1.0, close: 1.0 };
 var ID_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 var hasOwn = function (obj, k) { return Object.prototype.hasOwnProperty.call(obj, k); };
 
@@ -445,17 +449,30 @@ Compiler.prototype.parseStation = function (n, line) {
   if (!(cid in this.characters))
     throw new CompileError(n, '未定义的角色 "' + cid + '"（请先在头部用 @角色 定义）');
   var entry = { id: cid, _line: n };
+  var posTok = null, freePos = null, shotScale = null;
   for (var i = 1; i < toks.length; i++) {
     var t = toks[i];
     var emo = hasOwn(EMO_ALIAS, t) ? EMO_ALIAS[t] : null;
     if (emo) entry.sprite = emo;
-    else if (t === 'left' || t === 'center' || t === 'right') entry.pos = t;
+    else if (hasOwn(POS_X, t)) posTok = t;
+    else if (hasOwn(SHOT_SCALE, t)) shotScale = SHOT_SCALE[t];
     else if (/^\d*\.?\d+(\s*,\s*\d*\.?\d+){2}$/.test(t)) {
       var xyz = t.split(',').map(function (v) { return parseFloat(v); });
-      entry.x = xyz[0]; entry.y = xyz[1]; entry.scale = xyz[2];
-    } else throw new CompileError(n, '站位参数 "' + t + '" 无法识别（表情/left/center/right/x,y,scale）');
+      freePos = { x: xyz[0], y: xyz[1], scale: xyz[2] };
+    }
+    else if (/^\d*\.?\d+$/.test(t)) shotScale = parseFloat(t);
+    else throw new CompileError(n, '站位参数 "' + t + '" 无法识别（表情/far-left/left/center/right/far-right/远景/中景/近景/far/mid/close/数字缩放/x,y,scale）');
   }
-  if (!('pos' in entry) && !('x' in entry)) entry.pos = 'center';
+  if (freePos && shotScale !== null)
+    throw new CompileError(n, '自由位 x,y,scale 已含缩放，不能再加景别词');
+  if (freePos) { entry.x = freePos.x; entry.y = freePos.y; entry.scale = freePos.scale; }
+  else if (posTok === 'far-left' || posTok === 'far-right' || shotScale !== null) {
+    // far-left/far-right 或带景别词：一律转自由位（三槽 pos 没有 scale）
+    entry.x = POS_X[posTok || 'center'];
+    entry.y = 1.0;
+    entry.scale = shotScale !== null ? shotScale : 0.85;
+  }
+  else entry.pos = posTok || 'center';
   if (!this.cur.chars) this.cur.chars = [];
   this.cur.chars.push(entry);
 };

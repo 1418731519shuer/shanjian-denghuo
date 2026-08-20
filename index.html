@@ -364,6 +364,55 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
 .tl-block[draggable=true] { cursor:grab; }
 .tl-block.dragging { opacity:.4; }
 
+/* ---- 帧模式胶片条（🎬 帧 / 📊 轨道 切换） ---- */
+#tl-mode-bar { display:flex; gap:4px; padding:2px 6px; flex-shrink:0; }
+.tl-mode-btn { background:#141a28; color:#ccd5e0; border:1px solid #3a4a63; border-radius:4px;
+  font-size:.65em; padding:1px 8px; cursor:pointer; }
+.tl-mode-btn.on { border-color:#ffd75e; color:#ffd75e; }
+#tl-frames { display:none; gap:6px; padding:6px; overflow-x:auto; overflow-y:hidden; min-height:118px; align-items:stretch; }
+#se-timeline-wrap.frame-mode .tl-track, #se-timeline-wrap.frame-mode #tl-chars-container { display:none; }
+#se-timeline-wrap.frame-mode #tl-frames { display:flex; }
+.tl-frame { flex:0 0 auto; width:108px; cursor:pointer; }
+.tl-frame .fr-shot { position:relative; width:108px; height:64px; background:#0c1120;
+  border:1px solid #3a4a63; border-radius:4px; overflow:hidden; }
+.tl-frame:hover .fr-shot { border-color:#7fa0d0; }
+.tl-frame.sel .fr-shot { outline:2px solid #ffd75e; }
+.tl-frame.dangling .fr-shot { border:2px solid #e74c3c; }
+.tl-frame.dragging { opacity:.4; }
+.fr-shot img.fr-bg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:.85; }
+.fr-shot .fr-nobg { position:absolute; inset:0; background:linear-gradient(135deg,#1a2233,#3a4a63); }
+.fr-shot .fr-black { position:absolute; inset:0; background:#000; }
+.fr-shot img.fr-char { position:absolute; bottom:0; height:88%; transform:translateX(-50%); }
+.fr-shot .fr-text { position:absolute; left:0; right:0; bottom:0; font-size:8px; line-height:1.3;
+  padding:1px 3px; background:rgba(6,8,14,.8); color:#dde3ee;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fr-shot .fr-badges { position:absolute; top:1px; left:3px; font-size:9px; text-shadow:0 1px 2px #000; }
+.fr-chips { margin-top:2px; display:flex; flex-wrap:wrap; gap:2px; }
+.fr-chip { font-size:8px; line-height:1.5; padding:0 4px; border:1px solid #7fa0d0; border-radius:6px;
+  color:#a8c4ff; cursor:pointer; white-space:nowrap; max-width:104px; overflow:hidden; text-overflow:ellipsis; }
+.fr-chip:hover { background:#263652; }
+.fr-chip.end { border-color:#c0a050; color:#ffd75e; cursor:default; }
+.fr-chip:hover.end { background:none; }
+.tl-fgap { flex:0 0 10px; align-self:stretch; cursor:pointer; position:relative; }
+.tl-fgap::after { content:'+'; position:absolute; top:32px; left:50%; transform:translate(-50%,-50%);
+  font-size:10px; line-height:1; color:#7fa0d0; background:#141a28; border:1px solid #3a4a63; border-radius:50%;
+  width:13px; height:13px; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .15s; }
+.tl-fgap:hover::after, .tl-fgap.drop-hi::after { opacity:1; }
+.tl-fgap.drop-hi::after { color:#ffd75e; border-color:#ffd75e; }
+
+/* ---- 站位参考线（仅编辑器画布内显示） ---- */
+#se-guides { position:absolute; inset:0; z-index:4; pointer-events:none; }
+.se-guide-v { position:absolute; top:0; bottom:0; width:0; border-left:1px dashed rgba(127,160,208,.22); }
+.se-guide-v.hi { border-left:1px solid rgba(255,215,94,.85); }
+.se-guide-v::after { content:attr(data-name); position:absolute; top:2px; left:3px;
+  font-size:9px; color:rgba(127,160,208,.45); white-space:nowrap; }
+.se-guide-base { position:absolute; left:0; right:0; bottom:0; border-bottom:1px dashed rgba(127,160,208,.35); }
+/* 点选角色后的缩放滑杆（se-char-bar 内） */
+#se-scale-wrap { align-items:center; gap:4px; font-size:.65em; margin-left:6px; }
+#se-scale-wrap.hidden { display:none; }
+#se-scale-wrap:not(.hidden) { display:flex; }
+#se-scale-slider { width:110px; }
+
 /* 通用锚点弹层（chip 小面板） */
 .se-pop { position:fixed; z-index:300; background:#141a28; border:1px solid #7fa0d0; border-radius:.5em;
   padding:.7em; box-shadow:0 6px 24px rgba(0,0,0,.65); font-size:.8em; max-width:min(92vw,420px); }
@@ -610,6 +659,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
           <div id="se-canvas-bg"></div>
           <div id="se-canvas-chars"></div>
           <div id="se-canvas-hotspots"></div>
+          <div id="se-guides"></div>
           <div id="se-preview-overlay">
             <div id="se-pv-namebox"></div>
             <div id="se-pv-text"></div>
@@ -623,6 +673,12 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
   <div id="se-char-bar">
     <span style="font-size:.6em;opacity:.5;margin-right:4px">角色:</span>
     <div id="se-char-chips"></div>
+    <span id="se-scale-wrap" class="hidden">
+      <span id="se-scale-name" style="color:#ffd75e"></span>
+      <span style="opacity:.6">缩放</span>
+      <input type="range" id="se-scale-slider" min="0.5" max="1.2" step="0.05">
+      <span id="se-scale-val" style="min-width:2.5em">1.00</span>
+    </span>
     <span style="flex:1"></span>
     <button class="btn small" id="se-qadd-say" style="font-size:.6em;padding:.1em .4em">+对白</button>
     <button class="btn small" id="se-qadd-narrate" style="font-size:.6em;padding:.1em .4em">+旁白</button>
@@ -632,6 +688,11 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
     <button class="btn small" id="se-qadd-end" style="font-size:.6em;padding:.1em .4em">+结局</button>
   </div>
   <div id="se-timeline-wrap">
+    <div id="tl-mode-bar">
+      <button type="button" id="tl-mode-frame" class="tl-mode-btn">🎬 帧</button>
+      <button type="button" id="tl-mode-track" class="tl-mode-btn">📊 轨道</button>
+    </div>
+    <div id="tl-frames"></div>
     <div class="tl-track" id="tl-insert-row"><span class="tl-label">剪辑</span><div class="tl-blocks"></div></div>
     <div class="tl-track" id="tl-dialog"><span class="tl-label">对白</span><div class="tl-blocks"></div></div>
     <div id="tl-chars-container"></div>
@@ -1469,6 +1530,8 @@ function enterEditor() {
   backToTitle();
   $('scene-editor').classList.remove('hidden');
   $('title-screen').classList.add('hidden');
+  buildGuides();        /* 站位参考线（只建一次） */
+  setTlMode(tlMode);    /* 帧/轨道模式（记忆 localStorage，默认帧） */
   refreshEditorScenes();
   if (script.scenes.length) selectEditorScene(0);
   edHistInit();   /* 进编辑器时以当前剧本为撤销基态 */
@@ -1648,6 +1711,7 @@ function openAssetGrid(anchorEl, cfg) {
     grid.appendChild(cell);
   });
   pop.appendChild(grid);
+  if (cfg.footer) pop.appendChild(cfg.footer);   /* 可选底部附加区（如站位/景别 chips） */
   document.body.appendChild(pop);
   seGridPop = pop; /* 登记当前弹层，closeAssetGrid 才能真正关闭 */
   const r = anchorEl.getBoundingClientRect();
@@ -1746,19 +1810,29 @@ function renderEditorChars() {
       ev.preventDefault(); edCharSel = i;
       box.querySelectorAll('.se-ed-char').forEach((el,j)=>el.classList.toggle('sel',j===edCharSel));
       charClickEdit(c.id);
+      edUpdateScaleBar();
       const cv = $('se-canvas-wrap');
       const move = e2 => {
         const r = cv.getBoundingClientRect();
-        c.x = Math.round(Math.min(1,Math.max(0,(e2.clientX-r.left)/r.width))*1000)/1000;
-        c.y = Math.round(Math.min(1.2,Math.max(0,(e2.clientY-r.top)/r.height))*1000)/1000;
+        /* 拖拽中越界夹紧 x∈[0.02,0.98] / y∈[0.7,1.2]，并高亮 ±3% 内的参考线 */
+        c.x = Math.round(Math.min(0.98,Math.max(0.02,(e2.clientX-r.left)/r.width))*1000)/1000;
+        c.y = Math.round(Math.min(1.2,Math.max(0.7,(e2.clientY-r.top)/r.height))*1000)/1000;
         d.style.left=(c.x*100)+'%'; d.style.top=(c.y*100)+'%';
+        hiGuide(c.x);
       };
-      const up = () => { document.removeEventListener('mousemove',move); document.removeEventListener('mouseup',up); syncEditorChars(); };
+      const up = () => {
+        document.removeEventListener('mousemove',move); document.removeEventListener('mouseup',up);
+        hiGuide(NaN);   /* 清除参考线高亮 */
+        snapCharPos(c); /* 松手吸附预设位/夹紧 */
+        d.style.left=(c.x*100)+'%'; d.style.top=(c.y*100)+'%';
+        syncEditorChars();
+      };
       document.addEventListener('mousemove',move); document.addEventListener('mouseup',up);
     };
-    d.onwheel = ev => { ev.preventDefault(); edCharSel=i; c.scale=Math.round(Math.min(2,Math.max(0.3,c.scale+(ev.deltaY<0?0.05:-0.05)))*1000)/1000; d.style.transform=`translate(-50%,-100%) scale(${c.scale})`; syncEditorChars(); };
+    d.onwheel = ev => { ev.preventDefault(); edCharSel=i; c.scale=Math.round(Math.min(1.2,Math.max(0.5,c.scale+(ev.deltaY<0?0.05:-0.05)))*1000)/1000; d.style.transform=`translate(-50%,-100%) scale(${c.scale})`; edUpdateScaleBar(); syncEditorChars(); };
     box.appendChild(d);
   });
+  edUpdateScaleBar();   /* 点选状态与滑杆联动（无选中自动隐藏） */
 }
 function syncEditorChars() {
   if (edSceneIdx<0) return;
@@ -1811,7 +1885,19 @@ function renderCanvasHotspots(sc) {
 
 let edPreviewLine = -1; // which line the preview is showing (-1 = scene start)
 
+/* 时间轴模式：frame=胶片条（默认） / track=多轨道；选择记忆 localStorage */
+let tlMode = localStorage.getItem('wenyou_tl_mode') || 'frame';
+function setTlMode(m) {
+  tlMode = m === 'track' ? 'track' : 'frame';
+  localStorage.setItem('wenyou_tl_mode', tlMode);
+  const wrap = $('se-timeline-wrap');
+  wrap.classList.toggle('frame-mode', tlMode === 'frame');
+  $('tl-mode-frame').classList.toggle('on', tlMode === 'frame');
+  $('tl-mode-track').classList.toggle('on', tlMode === 'track');
+}
 function renderTimeline(sc) {
+  /* 帧/轨道两种 DOM 都渲染，CSS 按模式显隐（轨道 DOM 隐藏时仍供快捷键/测试驱动） */
+  if (tlMode === 'frame') renderFrameStrip(sc);
   const total = (sc.script||[]).length || 1;
   renderInsertGaps(sc);
   // Dialog track: narrate, say, choice
@@ -1926,6 +2012,243 @@ function renderTimeline(sc) {
   });
 }
 
+/* ================= 帧模式胶片条 + 站位系统（设计稿 v1 第四/五节） ================= */
+/* 预设五位（y=1.0 底线）与三档景别 */
+const ED_POS_PRESETS = [['far-left',0.10],['left',0.28],['center',0.50],['right',0.72],['far-right',0.90]];
+const ED_SCALE_PRESETS = [['远',0.75],['中',0.85],['近',1.0]];
+
+/* 帧状态推演：每帧在场人物（场景头 chars + say 自动补位，补位规则同引擎：center→left→right 首个空槽） */
+function frameStates(sc) {
+  const slotX = { left:0.28, center:0.50, right:0.72 };
+  const cur = (sc.chars || []).map(c => ({
+    id: c.id, sprite: c.sprite || 'normal',
+    x: c.x !== undefined ? c.x : (slotX[c.pos] !== undefined ? slotX[c.pos] : 0.5)
+  }));
+  const states = [];
+  (sc.script || []).forEach(cmd => {
+    if (cmd.type === 'say' && !cur.some(c => c.id === cmd.who)) {
+      const free = [0.50, 0.28, 0.72].find(x => !cur.some(c => c.x === x));
+      cur.push({ id: cmd.who, sprite: 'normal', x: free !== undefined ? free : 0.5, auto: true });
+    }
+    states.push(cur.map(c => ({ ...c })));
+  });
+  return states;
+}
+function renderFrameStrip(sc) {
+  const wrap = $('tl-frames');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  const cmds = sc.script || [];
+  const sceneIds = new Set(script.scenes.map(s => s.id));
+  const states = frameStates(sc);
+  const bgPath = sc.background;
+  let prevIds = [];
+  /* 场景级悬空：require_else 指向不存在的场景 → 第一帧红框 */
+  const sceneDangling = sc.require_else && !sceneIds.has(sc.require_else) ? 'require_else "' + sc.require_else + '" 不存在' : '';
+
+  /* 帧间隙：点 += 指令选择盘；拖帧到此 = 重排（逻辑同轨道剪辑行） */
+  const mkGap = i => {
+    const g = document.createElement('div');
+    g.className = 'tl-fgap'; g.dataset.gap = i;
+    g.title = '在第 ' + i + ' 条后插入指令（或拖帧到此重排）';
+    g.onclick = ev => { ev.stopPropagation(); openCmdPalette(g, i); };
+    g.ondragover = ev => { ev.preventDefault(); g.classList.add('drop-hi'); };
+    g.ondragleave = () => g.classList.remove('drop-hi');
+    g.ondrop = ev => {
+      ev.preventDefault(); g.classList.remove('drop-hi');
+      const m = ev.dataTransfer.getData('text/plain').match(/^cmd:(\d+)$/);
+      if (!m) return;
+      const from = parseInt(m[1], 10);
+      let to = i;
+      if (from === to || from + 1 === to) return; /* 原地不动 */
+      const [moved] = sc.script.splice(from, 1);
+      if (from < to) to--;
+      sc.script.splice(to, 0, moved);
+      selectEditorScene(edSceneIdx);
+      previewLine(sc, to);
+    };
+    return g;
+  };
+  wrap.appendChild(mkGap(0));
+
+  cmds.forEach((cmd, idx) => {
+    const fr = document.createElement('div');
+    fr.className = 'tl-frame' + (idx === edPreviewLine ? ' sel' : '');
+    fr.dataset.idx = idx;
+    fr.draggable = true;
+    fr.ondragstart = ev => { ev.dataTransfer.setData('text/plain', 'cmd:' + idx); fr.classList.add('dragging'); };
+    fr.ondragend = () => fr.classList.remove('dragging');
+    fr.onclick = ev => { ev.stopPropagation(); previewLine(sc, idx); };
+    fr.oncontextmenu = ev => { ev.preventDefault(); sc.script.splice(idx, 1); selectEditorScene(edSceneIdx); return false; };
+
+    /* 帧画面：背景缩略图 + 在场人物立绘 + 底部文字 */
+    const shot = document.createElement('div');
+    shot.className = 'fr-shot';
+    if (bgPath && bgPath !== 'none') {
+      const img = document.createElement('img');
+      img.className = 'fr-bg'; img.decoding = 'async'; img.alt = '';
+      img.onerror = () => img.remove();
+      img.src = assetUrl(bgPath);
+      shot.appendChild(img);
+    } else if (bgPath === 'none') {
+      const d = document.createElement('div'); d.className = 'fr-black'; shot.appendChild(d);
+    } else {
+      const d = document.createElement('div'); d.className = 'fr-nobg'; shot.appendChild(d);
+    }
+    (states[idx] || []).forEach(c => {
+      const p = spritePath(c.id, c.sprite);
+      if (!p) return;
+      const img = document.createElement('img');
+      img.className = 'fr-char'; img.decoding = 'async'; img.alt = '';
+      img.style.left = (c.x * 100) + '%';
+      img.onerror = () => img.remove();
+      img.src = assetUrl(p);
+      shot.appendChild(img);
+    });
+    /* 变化角标：▲入场 ▼出场（相对上一帧）+ 指令类型角标 */
+    const ids = (states[idx] || []).map(c => c.id);
+    const entered = ids.filter(id => !prevIds.includes(id));
+    const gone = prevIds.filter(id => !ids.includes(id));
+    const badges = [];
+    if (idx === 0 && ids.length) badges.push('▲×' + ids.length);
+    else {
+      if (entered.length) badges.push('▲' + entered.map(id => (script.characters[id] || {}).name || id).join(','));
+      if (gone.length) badges.push('▼' + gone.map(id => (script.characters[id] || {}).name || id).join(','));
+    }
+    const typeBadge = { show:'🖼', choice:'🔀', set:'⚙', goto:'⏭', end:'🏁', inspect:'🔍' }[cmd.type];
+    if (typeBadge) badges.push(typeBadge);
+    prevIds = ids;
+    if (badges.length) {
+      const b = document.createElement('div');
+      b.className = 'fr-badges'; b.textContent = badges.join(' ');
+      shot.appendChild(b);
+    }
+    const txt = cmd.type === 'narrate' ? '📖' + (cmd.text || '') :
+      cmd.type === 'say' ? (((script.characters[cmd.who] || {}).name || cmd.who) + ':' + (cmd.text || '')) :
+      cmd.type === 'choice' ? '🔀' + (cmd.options || []).map(o => o.text).join('/') :
+      cmd.type === 'set' ? '⚙' + Object.keys(cmd.vars || {}).join(',') :
+      cmd.type === 'goto' ? '⏭' + (cmd.target || '?') :
+      cmd.type === 'end' ? '🏁' + (cmd.label || '') :
+      cmd.type === 'show' ? '🖼' + (cmd.image || '').split('/').pop() :
+      cmd.type === 'inspect' ? '🔍调查' : cmd.type;
+    const te = document.createElement('div');
+    te.className = 'fr-text'; te.textContent = txt;
+    shot.appendChild(te);
+    fr.appendChild(shot);
+
+    /* 帧下跳转 chip：点击弹场景缩略图网格改目标 */
+    const chips = document.createElement('div');
+    chips.className = 'fr-chips';
+    const dangling = [];
+    if (idx === 0 && sceneDangling) dangling.push(sceneDangling);
+    const mkChip = (label, target, apply) => {
+      const c = document.createElement('span');
+      c.className = 'fr-chip';
+      c.textContent = label;
+      if (target && !sceneIds.has(target)) {   /* 悬空引用：chip 标红 + 帧卡红框 */
+        dangling.push('跳转目标 "' + target + '" 不存在');
+        c.style.borderColor = '#e74c3c'; c.style.color = '#ff8a7a';
+      }
+      c.onclick = ev => {
+        ev.stopPropagation();
+        openAssetGrid(c, { title:'选择跳转目标场景', items: sceneGridItems(true), current: target || '',
+          onPick: v => { apply(v); selectEditorScene(edSceneIdx); previewLine(sc, idx); } });
+      };
+      chips.appendChild(c);
+    };
+    if (cmd.type === 'goto') {
+      const branches = (cmd.branches && cmd.branches.length) ? cmd.branches : [{ target: cmd.target }];
+      branches.forEach((b, bi) => mkChip('→ ' + (b.target || '?'), b.target, v => {
+        if (cmd.branches && cmd.branches.length) cmd.branches[bi].target = v;
+        else { cmd.target = v; if (!v) delete cmd.target; }
+      }));
+      if (cmd.else_target) mkChip('else→ ' + cmd.else_target, cmd.else_target,
+        v => { cmd.else_target = v || undefined; if (!v) delete cmd.else_target; });
+    } else if (cmd.type === 'choice') {
+      (cmd.options || []).forEach(o => mkChip(o.goto ? '→ ' + o.goto : '继续', o.goto,
+        v => { o.goto = v || undefined; if (!v) delete o.goto; }));
+    } else if (cmd.type === 'end') {
+      const c = document.createElement('span');
+      c.className = 'fr-chip end'; c.textContent = '🏁' + (cmd.label || '结局');
+      chips.appendChild(c);
+    }
+    if (chips.children.length) fr.appendChild(chips);
+    if (dangling.length) { fr.classList.add('dangling'); fr.title = '悬空引用: ' + dangling.join('；'); }
+    wrap.appendChild(fr);
+    wrap.appendChild(mkGap(idx + 1));
+  });
+}
+
+/* ---- 站位参考线 / 吸附 / 缩放滑杆 ---- */
+function buildGuides() {
+  const g = $('se-guides');
+  if (!g || g.childElementCount) return;
+  ED_POS_PRESETS.forEach(([name, x]) => {
+    const v = document.createElement('div');
+    v.className = 'se-guide-v'; v.dataset.name = name; v.dataset.x = x;
+    v.style.left = (x * 100) + '%';
+    g.appendChild(v);
+  });
+  const b = document.createElement('div'); b.className = 'se-guide-base';
+  g.appendChild(b);
+}
+/* 拖拽经过参考线 ±3% 时高亮最近格 */
+function hiGuide(x) {
+  document.querySelectorAll('.se-guide-v').forEach(v =>
+    v.classList.toggle('hi', Math.abs(parseFloat(v.dataset.x) - x) <= 0.03));
+}
+/* 松手吸附：±3% 内吸到预设位并对齐 y=1.0 底线；越界夹紧 */
+function snapCharPos(c) {
+  c.x = Math.min(0.98, Math.max(0.02, c.x));
+  c.y = Math.min(1.2, Math.max(0.7, c.y));
+  const hit = ED_POS_PRESETS.find(p => Math.abs(p[1] - c.x) <= 0.03);
+  if (hit) { c.x = hit[1]; c.y = 1.0; }
+}
+/* 点选角色后底部缩放滑杆显隐与回填 */
+function edUpdateScaleBar() {
+  const w = $('se-scale-wrap');
+  if (!w) return;
+  const c = edCharsList[edCharSel];
+  if (edCharSel < 0 || !c) { w.classList.add('hidden'); return; }
+  w.classList.remove('hidden');
+  $('se-scale-name').textContent = (script.characters[c.id] || {}).name || c.id;
+  $('se-scale-slider').value = c.scale;
+  $('se-scale-val').textContent = Number(c.scale).toFixed(2);
+}
+/* 名牌菜单底部：预设站位 + 景别 chips（写入自由坐标 x/y/scale，不动 pos 三槽 schema） */
+function stationFooter(cid) {
+  const box = document.createElement('div');
+  box.style.cssText = 'margin-top:.4em;border-top:1px solid #3a4a63;padding-top:.4em';
+  const ec = () => edCharsList.find(c => c.id === cid);
+  const mkRow = (label, defs, apply) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:3px;align-items:center;margin:2px 0;flex-wrap:wrap';
+    const lb = document.createElement('span');
+    lb.style.cssText = 'font-size:.62em;opacity:.6;width:2.6em';
+    lb.textContent = label;
+    row.appendChild(lb);
+    defs.forEach(([name, val]) => {
+      const chip = document.createElement('span');
+      chip.className = 'opt-chip goto';
+      chip.style.fontSize = '.68em';
+      chip.textContent = name;
+      chip.onclick = ev => {
+        ev.stopPropagation();
+        const c = ec();
+        if (c) apply(c, val);
+        syncEditorChars();
+        closeAssetGrid();
+        selectEditorScene(edSceneIdx);
+      };
+      row.appendChild(chip);
+    });
+    box.appendChild(row);
+  };
+  mkRow('站位', ED_POS_PRESETS, (c, x) => { c.x = x; c.y = 1.0; });
+  mkRow('景别', ED_SCALE_PRESETS, (c, s) => { c.scale = s; });
+  return box;
+}
+
 function previewLine(sc, idx) {
   edPreviewLine = idx;
   const cmd = sc.script[idx];
@@ -1995,6 +2318,9 @@ function previewLine(sc, idx) {
   $('se-audio-info').textContent = '▶ 第'+idx+'条 ' + cmd.type;
   document.querySelectorAll('.tl-block').forEach(b => b.classList.remove('sel'));
   document.querySelectorAll(`.tl-block[data-idx="${idx}"]`).forEach(b => b.classList.add('sel'));
+  /* 帧模式胶片条同步选中态 */
+  document.querySelectorAll('.tl-frame').forEach(b => b.classList.remove('sel'));
+  document.querySelectorAll(`.tl-frame[data-idx="${idx}"]`).forEach(b => b.classList.add('sel'));
   document.querySelectorAll('.se-cmd-row').forEach(r => r.classList.remove('sel'));
   const row = document.querySelector(`.se-cmd-row[data-idx="${idx}"]`);
   if (row) { row.classList.add('sel'); row.scrollIntoView({block:'nearest'}); }
@@ -2675,6 +3001,7 @@ function quickSpriteSelect(cid, tagEl) {
   openAssetGrid(tagEl, {
     title: (ch.name || cid) + ' · 立绘/表情',
     items, current,
+    footer: stationFooter(cid),   /* 底部：预设站位五位 + 景别三档 */
     onPick: s => {
       const ec = edCharsList.find(c => c.id === cid);
       if (ec) ec.sprite = s;
@@ -3530,6 +3857,19 @@ function bindUI() {
   $('se-checkpoint').onchange = ev => {
     if (edSceneIdx<0) return;
     script.scenes[edSceneIdx].checkpoint = ev.target.checked;
+  };
+  /* 帧/轨道模式切换 */
+  $('tl-mode-frame').onclick = () => { setTlMode('frame'); if (edSceneIdx>=0) renderTimeline(script.scenes[edSceneIdx]); };
+  $('tl-mode-track').onclick = () => { setTlMode('track'); if (edSceneIdx>=0) renderTimeline(script.scenes[edSceneIdx]); };
+  /* 点选角色的缩放滑杆（0.5-1.2 步进 0.05，实时预览） */
+  $('se-scale-slider').oninput = ev => {
+    const c = edCharsList[edCharSel];
+    if (edCharSel < 0 || !c) return;
+    c.scale = parseFloat(ev.target.value);
+    $('se-scale-val').textContent = c.scale.toFixed(2);
+    const el = document.querySelector('.se-ed-char[data-cid="' + c.id + '"]');
+    if (el) el.style.transform = `translate(-50%,-100%) scale(${c.scale})`;
+    syncEditorChars();   /* 内部 edChanged 防抖入撤销栈 */
   };
 }
 function persistSettings() { localStorage.setItem('wenyou_settings', JSON.stringify(settings)); }
