@@ -53,6 +53,8 @@
 山门试炼，一剑问心。掌门端坐云台之上，莫师兄侍立一旁。
 掌门: 来者，报上你的道。
 你如今的修为是{xiuwei}，苏璃对你的好感是{favor}。
+!判定 xiuwei>=15 成功{flag_lingguang=1}
+你灵机一动，剑招比平日更顺了几分。 [flag_lingguang==1]
 ?
 > 拔剑问天 [xiuwei>=25] -> s_end_sword
 > 与苏璃归隐灯下 [favor>=12] -> s_end_love

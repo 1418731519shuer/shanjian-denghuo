@@ -316,7 +316,7 @@ class Compiler:
     def parse_attr_def(self, n, line):
         toks = split_args(line[3:].strip(), n)
         if len(toks) < 6:
-            raise CompileError(n, '%属性 格式：%属性 <id> <显示名> <初值> <最小> <最大> <颜色>')
+            raise CompileError(n, '%属性 格式：%属性 <id> <显示名> <初值> <最小> <最大> <颜色> [@归属]')
         aid, name = toks[0], toks[1]
         if not ID_RE.match(aid):
             raise CompileError(n, f'属性 id "{aid}" 只能含英文字母/数字/下划线')
@@ -327,8 +327,16 @@ class Compiler:
         except ValueError:
             raise CompileError(n, f'%属性 的 初值/最小/最大 必须是数字：{toks[2]} {toks[3]} {toks[4]}')
         color = toks[5]
+        owner_raw = None
+        for t in toks[6:]:
+            if t.startswith('@') and owner_raw is None:
+                owner_raw = t[1:]
+                if not owner_raw:
+                    raise CompileError(n, '%属性 归属 @ 后缺少 主控/player/我/角色id')
+            else:
+                raise CompileError(n, f'%属性 未知参数 "{t}"（归属写法：@主控 / @player / @我 / @角色id）')
         self.attrs[aid] = {'name': name, 'init': init, 'min': lo, 'max': hi,
-                           'bar': color, 'line': n}
+                           'bar': color, 'owner_raw': owner_raw, 'line': n}
 
     # ---------- 场景头 ----------
     def parse_scene_head(self, n, line):
@@ -404,6 +412,8 @@ class Compiler:
                                        '_line': n})
         elif line.startswith('!调查'):
             self.parse_inspect(n, line[3:].strip())
+        elif line.startswith('!判定'):
+            self.parse_check(n, line[3:].strip())
         elif line.startswith('->'):
             self.parse_goto(n, line[2:].strip())
         elif line.startswith('::结局'):
@@ -556,6 +566,105 @@ class Compiler:
             cmd['show'] = show
         self.cur['script'].append(cmd)
 
+    # ---------- 判定 ----------
+    @staticmethod
+    def _num(v):
+        """'15' -> 15（int），'15.5' -> 15.5（float），与 tsc.js 输出保持一致。"""
+        f = float(v)
+        return int(f) if f == int(f) else f
+
+    def resolve_attr(self, n, token):
+        """判定属性：可写 id 或显示名（同对白说话人规则）。未定义仅告警（运行时按 0）。"""
+        if token in self.attrs:
+            return token
+        for aid, a in self.attrs.items():
+            if a['name'] == token:
+                return aid
+        self.warnings.append(
+            f'第{n}行：!判定 引用的属性 "{token}" 未在 %属性 中定义（运行时按 0 处理）')
+        return token
+
+    def attr_display(self, aid):
+        a = self.attrs.get(aid)
+        return a['name'] if a else aid
+
+    def parse_check(self, n, s):
+        """!判定 属性>=值 [成功->场景 {set}] [失败->场景 {set}] [行尾条件]
+        !判定 属性 难度N 掷骰 [成功/失败同上]   —— "掷骰" 关键词切换 roll 模式"""
+        # 1) 行尾 [条件] → if（与其它指令一致）
+        cond = None
+        m = re.search(r'\[([^\[\]]*)\]\s*$', s)
+        if m:
+            cond = m.group(1).strip()
+            self.guard_expr(n, cond)
+            s = s[:m.start()].strip()
+        # 2) 成功/失败 分段
+        parts = re.split(r'(成功|失败)', s)
+        head = parts[0].strip()
+        branches = {}
+        for i in range(1, len(parts), 2):
+            branches[parts[i]] = parts[i + 1]
+        # 3) 头部：judge = 属性op值；roll = 属性 难度N 掷骰
+        attr = op = value = None
+        if '掷骰' in head:
+            mode = 'roll'
+            head = head.replace('掷骰', ' ').strip()
+            md = re.search(r'难度\s*(-?\d+(?:\.\d+)?)', head)
+            if not md:
+                raise CompileError(n, '!判定 掷骰模式需要写 难度N（如：!判定 魅力 难度18 掷骰 成功->s_a 失败->s_b）')
+            value = self._num(md.group(1))
+            attr = (head[:md.start()] + head[md.end():]).strip()
+            if not attr:
+                raise CompileError(n, '!判定 缺少判定属性（如：!判定 魅力 难度18 掷骰 …）')
+        else:
+            if '难度' in head:
+                raise CompileError(n, '难度N 只用于掷骰模式：!判定 属性 难度N 掷骰 …')
+            mj = re.match(r'^([^\s=<>!]+?)\s*(>=|<=|==|!=|>|<)\s*(-?\d+(?:\.\d+)?)\s*$', head)
+            if not mj:
+                raise CompileError(n, '!判定 格式：!判定 属性>=值 [成功->场景 {set}] [失败->场景 {set}]'
+                                      '；掷骰：!判定 属性 难度N 掷骰 …')
+            mode = 'judge'
+            attr, op, value = mj.group(1), mj.group(2), self._num(mj.group(3))
+        attr = self.resolve_attr(n, attr)
+        # 4) 分支
+        success = self.parse_check_branch(n, '成功', branches['成功']) if '成功' in branches else None
+        fail = self.parse_check_branch(n, '失败', branches['失败']) if '失败' in branches else None
+        # 5) 按固定字段顺序组装（与 tsc.js 一致）
+        cmd = {'type': 'check', 'attr': attr}
+        if op is not None:
+            cmd['op'] = op
+        cmd['value'] = value
+        cmd['mode'] = mode
+        cmd['text'] = self.attr_display(attr) + '判定'
+        if success:
+            cmd['success'] = success
+        if fail:
+            cmd['fail'] = fail
+        if cond is not None:
+            cmd['if'] = cond
+        cmd['_line'] = n
+        self.cur['script'].append(cmd)
+
+    def parse_check_branch(self, n, key, body):
+        """解析 成功/失败 后的内容：->场景 与 {变量操作}，任意顺序，可都省（=顺序继续）。"""
+        out = {}
+        rest = body
+        mg = re.search(r'->\s*([A-Za-z_][A-Za-z0-9_]*)', rest)
+        if mg:
+            out['goto'] = mg.group(1)
+            rest = rest[:mg.start()] + rest[mg.end():]
+        ms = re.search(r'\{([^{}]*)\}', rest)
+        if ms:
+            ops = self.try_set_ops(ms.group(1))
+            if ops is None:
+                raise CompileError(n, f'!判定 {key} 的 {{...}} 变量操作无法解析：{{{ms.group(1)}}}')
+            out['set'] = ops
+            rest = rest[:ms.start()] + rest[ms.end():]
+        if rest.strip():
+            raise CompileError(n, f'!判定 {key} 后无法识别的内容：{rest.strip()!r}'
+                                  '（支持 ->场景 与 {变量操作}）')
+        return out
+
     # ---------- 跳转 ----------
     def parse_goto(self, n, s):
         m = re.match(r'^(\S+)(?:\s*\[([^\[\]]*)\])?\s*$', s)
@@ -625,6 +734,19 @@ class Compiler:
             return
         ids = {sc['id'] for sc in self.scenes}
 
+        # 0) 属性归属解析：@主控/@player/@我 → player；@角色id → 该角色（须已定义）
+        for aid, a in self.attrs.items():
+            raw = a.get('owner_raw')
+            if raw is None:
+                continue
+            if raw in ('主控', 'player', '我'):
+                a['owner'] = 'player'
+            elif raw in self.characters:
+                a['owner'] = raw
+            else:
+                self.err(a['line'], f'属性 "{aid}" 的归属 "@{raw}" 不是已定义的角色 id'
+                                    '（主控写法：@主控 / @player / @我）')
+
         # 1) 场景引用
         for sc in self.scenes:
             ref = sc.get('require_else')
@@ -638,6 +760,12 @@ class Compiler:
                     for o in cmd['options']:
                         if 'goto' in o and o['goto'] not in ids:
                             self.err(o['_line'], f'选项 -> 指向未定义的场景 "{o["goto"]}"')
+                if cmd['type'] == 'check':
+                    for bk, bname in (('success', '成功'), ('fail', '失败')):
+                        br = cmd.get(bk) or {}
+                        if br.get('goto') and br['goto'] not in ids:
+                            self.err(cmd['_line'],
+                                     f'!判定 {bname} 指向未定义的场景 "{br["goto"]}"')
         if not self.errors:
             # 2) 场景收尾：执行不能跑出场景末尾（否则游戏卡死）
             for sc in self.scenes:
@@ -654,6 +782,12 @@ class Compiler:
                             safe = True
                     elif t == 'choice':
                         if cmd['options'] and all('goto' in o for o in cmd['options']):
+                            safe = True
+                    elif t == 'check':
+                        # 成功/失败都带跳转且指令本身无条件：两条路都离场，不会跑出末尾
+                        if 'if' not in cmd \
+                                and (cmd.get('success') or {}).get('goto') \
+                                and (cmd.get('fail') or {}).get('goto'):
                             safe = True
                 if not safe:
                     self.err(sc['_line'],
@@ -675,6 +809,11 @@ class Compiler:
                         for o in cmd['options']:
                             if 'goto' in o:
                                 adj[sc['id']].add(o['goto'])
+                    elif cmd['type'] == 'check':
+                        for bk in ('success', 'fail'):
+                            g = (cmd.get(bk) or {}).get('goto')
+                            if g:
+                                adj[sc['id']].add(g)
             seen, stack = set(), [self.scenes[0]['id']]
             while stack:
                 cur = stack.pop()
@@ -721,6 +860,9 @@ class Compiler:
                 elif cmd['type'] == 'choice':
                     for o in cmd['options']:
                         used_vars.update((o.get('set') or {}).keys())
+                elif cmd['type'] == 'check':
+                    for bk in ('success', 'fail'):
+                        used_vars.update(((cmd.get(bk) or {}).get('set') or {}).keys())
         for aid, a in self.attrs.items():
             if aid not in used_vars:
                 self.warnings.append(f'第{a["line"]}行：属性 "{aid}"（{a["name"]}）从未被修改')
@@ -730,9 +872,13 @@ class Compiler:
         def num(v):
             return int(v) if float(v) == int(v) else v
 
-        attrs = {aid: {'name': a['name'], 'init': num(a['init']),
-                       'min': num(a['min']), 'max': num(a['max']), 'bar': a['bar']}
-                 for aid, a in self.attrs.items()}
+        attrs = {}
+        for aid, a in self.attrs.items():
+            item = {'name': a['name'], 'init': num(a['init']),
+                    'min': num(a['min']), 'max': num(a['max']), 'bar': a['bar']}
+            if a.get('owner'):
+                item['owner'] = a['owner']    # 归属：player 或角色 id（仅影响面板分组）
+            attrs[aid] = item
         chars = {}
         for cid, c in self.characters.items():
             if c['prefix'] in KNOWN_SETS:

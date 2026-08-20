@@ -323,6 +323,24 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
 .tl-block.end { background:#5a2d4a; }
 .tl-block.show { background:#2d4a5a; }
 .tl-block.inspect { background:#5a4a2d; }
+.tl-block.check { background:#6a5a1d; }
+/* ---- 判定指令 check：全屏演出 overlay ---- */
+#check-layer { z-index:60; background:rgba(0,0,0,.72); display:flex; align-items:center; justify-content:center; }
+#check-box { min-width:min(80vw,380px); text-align:center; padding:1.6em 2.2em;
+  background:rgba(12,16,28,.96); border:1px solid #7fa0d0; border-radius:.7em;
+  animation:check-pop .25s ease-out; }
+@keyframes check-pop { from { transform:scale(.85); opacity:0; } to { transform:scale(1); opacity:1; } }
+#check-title { font-size:1.25em; letter-spacing:.12em; margin-bottom:.5em; }
+#check-detail { font-size:.85em; opacity:.75; margin-bottom:.7em; }
+#check-dice { font-size:2.6em; font-family:monospace; margin:.15em 0; color:#ffd75e; }
+#check-result { font-size:2em; font-weight:bold; letter-spacing:.15em; min-height:1.4em;
+  animation:check-pop .3s ease-out; }
+#check-result.ok { color:#ffd75e; text-shadow:0 0 18px rgba(255,215,94,.5); }
+#check-result.ng { color:#8a8f9a; }
+#check-hint { font-size:.7em; opacity:.45; margin-top:.8em; }
+/* ---- 属性面板分组 ---- */
+.attr-group-head { margin:.9em 0 .3em; font-size:.9em; letter-spacing:.08em;
+  border-bottom:1px solid #3a4a63; padding-bottom:.2em; }
 .tl-block.bgm-block { background:#2d4a4a; }
 .tl-block.sfx-block { background:#4a2d4a; }
 .tl-block.char-block { background:#2a4a3a; }
@@ -569,6 +587,17 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
   </div>
 </div>
 
+<!-- 判定指令 check 的全屏演出层 -->
+<div id="check-layer" class="overlay hidden">
+  <div id="check-box">
+    <div id="check-title">判定</div>
+    <div id="check-detail"></div>
+    <div id="check-dice" class="hidden">🎲</div>
+    <div id="check-result"></div>
+    <div id="check-hint">点击继续</div>
+  </div>
+</div>
+
 <div id="save-panel" class="overlay hidden">
   <div class="panel">
     <h2 id="save-panel-title">存档</h2>
@@ -722,7 +751,7 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
 <script>
 'use strict';
 /* ================= 内嵌剧本 ================= */
-const EMBEDDED_SCRIPT = {"meta": {"title": "她的山间灯火", "author": "AI工坊", "version": "0.1", "defaults": {"text_speed": 25, "bgm_volume": 0.5, "auto_delay": 1800}}, "attrs": {"favor_su": {"name": "苏璃好感", "init": 0, "min": 0, "max": 100, "bar": "#FFB6C1", "bind": {"favor_tang": 0.2}}, "favor_shen": {"name": "沈青好感", "init": 0, "min": 0, "max": 100, "bar": "#87CEEB"}, "favor_tang": {"name": "阿棠好感", "init": 0, "min": 0, "max": 100, "bar": "#E8C47E"}, "charm": {"name": "魅力", "init": 10, "min": 0, "max": 100, "bar": "#F0E68C"}}, "characters": {"su": {"name": "苏璃", "color": "#FFB6C1", "look": "十六岁少女，双丫髻系粉丝带，杏眼灵动，笑容活泼，穿淡粉色齐胸襦裙，灯笼铺学徒打扮，腰间挂着小剪刀和红绳", "sprites": {"normal": "chars/su_normal.png", "smile": "chars/su_smile.png", "angry": "chars/su_angry.png", "sad": "chars/su_sad.png", "surprise": "chars/su_surprise.png"}}, "shen": {"name": "沈青", "color": "#87CEEB", "look": "二十岁女剑客，高马尾束青色发带，眉眼冷峻，穿靛青色劲装短打与护腕，背负一柄长剑，身姿挺拔", "sprites": {"normal": "chars/shen_normal.png", "smile": "chars/shen_smile.png", "angry": "chars/shen_angry.png", "sad": "chars/shen_sad.png", "surprise": "chars/shen_surprise.png"}}, "tang": {"name": "阿棠", "color": "#E8C47E", "look": "十八岁温柔茶娘，低挽发髻插木簪，眉眼温婉，穿浅杏色布衣长裙外罩茶色围裙，腕上搭着白布巾", "sprites": {"normal": "chars/tang_normal.png", "smile": "chars/tang_smile.png", "angry": "chars/tang_angry.png", "sad": "chars/tang_sad.png", "surprise": "chars/tang_surprise.png"}}}, "assets_dir": "assets/", "scenes": [{"id": "s1_ferry", "background": "bg/ferry_night.jpg", "bgm": {"src": "bgm/rain_night.mp3", "start": 12.5, "end": 45.0, "loop": true, "fade_in": 1.0, "fade_out": 1.0, "volume": 0.8}, "sfx": ["sfx/rain_loop.wav", "sfx/boat_creak.wav"], "checkpoint": true, "chars": [], "script": [{"type": "narrate", "text": "雨是从过鹰嘴崖那年开始下的，下到你离开灯溪镇，又下到你回来。"}, {"type": "narrate", "text": "渡船在河心晃。艄公披着蓑衣蹲在船尾，灯影碎在水面上，像一把被打散的金箔。"}, {"type": "narrate", "text": "三年前你也是在这样的夜里走的。怀里那盏没做完的兔子灯，如今躺在行李最底下，竹骨都泛黄了。"}, {"type": "narrate", "text": "船头没有人同行。只有我提着灯，看渡口那一点光慢慢近了。"}, {"type": "choice", "options": [{"text": "起身帮艄公拽住被风掀起的篷布", "set": {"charm": "charm+2", "flag_ferry_hand": 1}, "goto": "s1_tea"}, {"text": "裹紧斗篷，把那点近乡情怯按回心底", "set": {"flag_ferry_quiet": 1}, "goto": "s1_tea"}]}]}, {"id": "s1_tea", "background": "bg/teashelter.jpg", "bgm": "bgm/teashelter.mp3", "sfx": ["sfx/rain_on_roof.wav"], "chars": [{"id": "tang", "pos": "center", "sprite": "normal", "effect": "fade"}], "script": [{"type": "narrate", "text": "渡口的茶棚还亮着灯。雨帘把灯火泡得发胀，像一枚温热的橘子。"}, {"type": "say", "who": "tang", "text": "这位客官，雨大，进来坐坐吧。……诶？"}, {"type": "say", "who": "tang", "text": "是你。真的是你——阿灯。你走的时候，这茶棚的招牌还没换过呢。"}, {"type": "narrate", "text": "她把你按到最靠里的位置，袖口带起一阵炒茶的暖香。三年不见，她擦桌子的手势还是那样，先画半圈，再画半圈。"}, {"type": "inspect", "x": 0.42, "y": 0.62, "w": 0.16, "h": 0.18, "show": {"image": "cg/teacup.png", "text": "粗陶茶盏，盏沿有一道旧磕痕。你认得它——走之前那个晚上，你用这只盏喝过最后一盏茶。她居然还留着，还摆在手边最常用的位置。"}}, {"type": "say", "who": "tang", "text": "雨一时停不了。茶是今春的新茶，水刚开——你先暖暖手，别说话，让我先看够。"}, {"type": "choice", "options": [{"text": "“这只盏……你还留着。”", "set": {"favor_tang": "favor_tang+3", "flag_teacup": 1}, "goto": "s1_lantern"}, {"text": "“招牌换了新的？字迹倒像你的。”", "set": {"favor_tang": "favor_tang+1", "charm": "charm+2"}, "goto": "s1_lantern"}, {"text": "默默喝茶，听她讲这三年镇上的事", "set": {"favor_tang": "favor_tang+2"}, "goto": "s1_lantern"}]}]}, {"id": "s1_lantern", "background": "bg/lantern_shop.jpg", "bgm": "bgm/shop_warm.mp3", "chars": [{"id": "su", "pos": "right", "sprite": "surprise", "effect": "slide"}], "script": [{"type": "narrate", "text": "雨歇了。镇口灯笼铺的灯还亮着，满墙的纸灯笼把整条街烘成蜜色。"}, {"type": "say", "who": "su", "text": "——阿灯？！阿灯阿灯阿灯！你回来怎么不先告诉我！"}, {"type": "say", "who": "su", "text": "三年了！说好一年一封信，你数数你写了几封？两封！两封半！那半封还被雨淋花了！"}, {"type": "say", "who": "su", "text": "……算了。回来就好。"}, {"type": "narrate", "text": "她别过脸去，手指无意识地绕着一根竹篾。铺子里堆着半成品的灯笼骨架——三日后就是灯会，她一个人根本忙不完。"}, {"type": "choice", "options": [{"text": "卷起袖子：“这些灯骨，我帮你扎。”", "set": {"favor_su": "favor_su+5", "flag_help_lantern": 1}, "goto": "s2_prep"}, {"text": "取出行李里那盏泛黄的兔子灯：“你看，我带回来了。”", "set": {"favor_su": "favor_su+3", "charm": "charm+2", "flag_rabbit_lamp": 1}, "goto": "s2_prep"}, {"text": "“我先去渡口还阿棠的伞，回头再来。”", "set": {"favor_tang": "favor_tang+2", "favor_su": "favor_su-2"}, "goto": "s2_prep"}]}]}, {"id": "s2_prep", "background": "bg/town_day.jpg", "bgm": "bgm/town_day.mp3", "sfx": ["sfx/market_noise.wav"], "checkpoint": true, "chars": [{"id": "su", "pos": "left", "sprite": "smile", "effect": "fade"}, {"id": "tang", "pos": "right", "sprite": "normal", "effect": "fade"}], "script": [{"type": "narrate", "text": "三日后。灯会前的灯溪镇像一只被抖开的百宝匣，满街都是竹篾、糨糊和彩纸的味道。"}, {"type": "say", "who": "su", "text": "阿灯！主街这排灯架归我们铺子，扎完这排才算完——你可不许跑。"}, {"type": "say", "who": "tang", "text": "灯会那晚渡口人多，我打算把茶棚摆到桥头来。苏璃，给你留一盏最亮的挂棚口，好不好？"}, {"type": "say", "who": "su", "text": "要！要兔子形的！……阿灯你笑什么！"}, {"type": "choice", "options": [{"text": "帮苏璃扶梯挂灯，听她讲每盏灯的来历", "set": {"favor_su": "favor_su+4"}, "goto": "s2_makelight"}, {"text": "帮阿棠把茶棚的桌椅搬去桥头", "set": {"favor_tang": "favor_tang+4"}, "goto": "s2_makelight"}, {"text": "先满镇转一圈，看看灯会还有什么稀罕布置", "set": {"charm": "charm+2", "flag_explore": 1}, "goto": "s2_makelight"}]}]}, {"id": "s2_makelight", "background": "bg/lantern_shop.jpg", "bgm": "bgm/shop_warm.mp3", "chars": [{"id": "su", "x": 0.3, "y": 0.98, "sprite": "smile", "effect": "none"}, {"id": "tang", "x": 0.7, "y": 0.98, "sprite": "smile", "effect": "fade"}, {"id": "shen", "x": 0.5, "y": 0.9, "scale": 0.82, "sprite": "normal", "effect": "fade"}], "script": [{"type": "narrate", "text": "午后，灯笼铺里支起了长桌。苏璃教阿棠糊灯面，你负责扎骨。门口光线一暗——镇外独居的那位剑客路过，却停住了脚。"}, {"type": "say", "who": "su", "text": "沈青姐姐！进来坐呀，站门口做什么。"}, {"type": "say", "who": "shen", "text": "……路过。这盏鲤鱼灯的骨架，走线很稳。"}, {"type": "narrate", "text": "她说的正是你扎的那盏。目光在你手上的竹篾停了一瞬，像剑尖点水，随即移开。"}, {"type": "set", "vars": {"favor_shen": "favor_shen+3", "charm": "charm+3", "met_shen": 1}}, {"type": "say", "who": "tang", "text": "阿灯的手艺没落下呢。当年镇上都说，灯艺师的手，扎出来的灯自己会发光。"}, {"type": "say", "who": "su", "text": "那当然！也不看是谁的师……师姐！"}]}, {"id": "s2_bamboo", "background": "bg/bamboo.jpg", "bgm": "bgm/bamboo_wind.mp3", "sfx": ["sfx/sword_whoosh.wav", "sfx/bamboo_rustle.wav"], "chars": [{"id": "shen", "pos": "center", "sprite": "normal", "effect": "fade"}], "script": [{"type": "narrate", "text": "给镇西送灯样的路上，你绕进了镇外那片竹林。剑光先于人声到了。"}, {"type": "show", "image": "cg/sword_light.jpg"}, {"type": "narrate", "text": "一线青锋劈开雾气，竹叶簌簌地落，却在触及她衣袖之前齐齐偏开，像被剑意推开。"}, {"type": "set", "vars": {"favor_shen": "favor_shen+2", "flag_saw_sword": 1}}, {"type": "say", "who": "shen", "text": "看了多久了？"}, {"type": "say", "who": "shen", "text": "……不必紧张。能看清我刚才那一剑的人，镇上没有几个。你算一个。"}, {"type": "choice", "options": [{"text": "“最后一式收剑时，手腕松了半分。是旧伤？”", "set": {"favor_shen": "favor_shen+5", "flag_noticed_wound": 1}, "goto": "s2_festival_night"}, {"text": "不打扰她，把灯样挂在竹梢，静静看完整套剑再走", "set": {"favor_shen": "favor_shen+3", "charm": "charm+2"}, "goto": "s2_festival_night"}]}]}, {"id": "s2_festival_night", "background": "bg/festival_night.jpg", "bgm": "bgm/festival.mp3", "sfx": ["sfx/crowd_cheer.wav"], "chars": [], "script": [{"type": "narrate", "text": "灯会当夜。千盏灯一齐点起来的瞬间，整条河都成了流淌的星河。"}, {"type": "narrate", "text": "人潮在街口分开三个方向：灯笼铺前苏璃在朝这边张望，桥头茶棚阿棠收摊收得手忙脚乱，而镇外竹林的方向，有剑气挑开夜色。"}, {"type": "choice", "options": [{"text": "约苏璃逛灯会（苏璃好感≥15）", "goto": "s2_end_su", "if": "favor_su>=15"}, {"text": "提着新扎的灯，去竹林找沈青", "goto": "s2_find_shen"}, {"text": "去桥头帮阿棠收摊", "set": {"favor_tang": "favor_tang+3"}, "goto": "s2_end_tang"}]}]}, {"id": "s2_end_su", "background": "bg/festival_night.jpg", "chars": [{"id": "su", "pos": "center", "sprite": "smile", "effect": "fade"}], "script": [{"type": "say", "who": "su", "text": "你真的来啦。……那盏兔子灯，我偷偷挂在你铺子门口了，最高那盏。"}, {"type": "narrate", "text": "灯火落在她眼睛里。她伸手拉住你的袖口，像拉住一件失而复得的东西。"}, {"type": "goto", "target": "s3_placeholder"}]}, {"id": "s2_find_shen", "background": "bg/bamboo_night.jpg", "bgm": "bgm/bamboo_wind.mp3", "require": "charm>=15 && favor_shen>=10", "require_else": "s2_refused", "chars": [{"id": "shen", "pos": "center", "sprite": "normal", "effect": "fade"}], "script": [{"type": "narrate", "text": "竹林的灯比镇上暗，你的脚步却比预想的稳。她在竹影深处收剑回身，看见你手里的灯，没有赶人。"}, {"type": "say", "who": "shen", "text": "灯会不去看，来竹林做什么。……灯，是给我的？"}, {"type": "goto", "target": "s3_placeholder"}]}, {"id": "s2_refused", "background": "bg/bamboo_night.jpg", "bgm": "bgm/bamboo_wind.mp3", "chars": [], "script": [{"type": "narrate", "text": "竹林口挂着一方小小的木牌：「今夜不见客」。夜风穿林，剑声遥遥，你终究没有走进去。"}, {"type": "narrate", "text": "（魅力或沈青好感不足——回到灯会，或下一周目再叩这片竹影。）"}, {"type": "goto", "target": "s3_placeholder"}]}, {"id": "s2_end_tang", "background": "bg/teashelter_night.jpg", "chars": [{"id": "tang", "pos": "center", "sprite": "smile", "effect": "fade"}], "script": [{"type": "say", "who": "tang", "text": "就知道你会来。最后一盏茶，给你留的——还是那只盏。"}, {"type": "narrate", "text": "收完摊，她把棚口那盏兔子灯摘下来塞进你手里。灯纸上有她新写的字：欢迎回家。"}, {"type": "goto", "target": "s3_placeholder"}]}, {"id": "s3_placeholder", "background": "none", "bgm": "none", "chars": [], "script": [{"type": "narrate", "text": "【第二幕 完】灯会未尽，灯溪镇的故事还长——第三幕「灯火可亲」正在撰写中。当前数值：苏璃好感 {favor_su} / 沈青好感 {favor_shen} / 阿棠好感 {favor_tang} / 魅力 {charm}。"}, {"type": "end", "label": "幕间·灯火未阑"}]}]};
+const EMBEDDED_SCRIPT = {"meta": {"title": "她的山间灯火", "author": "AI工坊", "version": "0.1", "defaults": {"text_speed": 25, "bgm_volume": 0.5, "auto_delay": 1800}}, "attrs": {"favor_su": {"name": "苏璃好感", "init": 0, "min": 0, "max": 100, "bar": "#FFB6C1", "bind": {"favor_tang": 0.2}, "owner": "su"}, "favor_shen": {"name": "沈青好感", "init": 0, "min": 0, "max": 100, "bar": "#87CEEB", "owner": "shen"}, "favor_tang": {"name": "阿棠好感", "init": 0, "min": 0, "max": 100, "bar": "#E8C47E", "owner": "tang"}, "charm": {"name": "魅力", "init": 10, "min": 0, "max": 100, "bar": "#F0E68C", "owner": "player"}}, "characters": {"su": {"name": "苏璃", "color": "#FFB6C1", "look": "十六岁少女，双丫髻系粉丝带，杏眼灵动，笑容活泼，穿淡粉色齐胸襦裙，灯笼铺学徒打扮，腰间挂着小剪刀和红绳", "sprites": {"normal": "chars/su_normal.png", "smile": "chars/su_smile.png", "angry": "chars/su_angry.png", "sad": "chars/su_sad.png", "surprise": "chars/su_surprise.png"}}, "shen": {"name": "沈青", "color": "#87CEEB", "look": "二十岁女剑客，高马尾束青色发带，眉眼冷峻，穿靛青色劲装短打与护腕，背负一柄长剑，身姿挺拔", "sprites": {"normal": "chars/shen_normal.png", "smile": "chars/shen_smile.png", "angry": "chars/shen_angry.png", "sad": "chars/shen_sad.png", "surprise": "chars/shen_surprise.png"}}, "tang": {"name": "阿棠", "color": "#E8C47E", "look": "十八岁温柔茶娘，低挽发髻插木簪，眉眼温婉，穿浅杏色布衣长裙外罩茶色围裙，腕上搭着白布巾", "sprites": {"normal": "chars/tang_normal.png", "smile": "chars/tang_smile.png", "angry": "chars/tang_angry.png", "sad": "chars/tang_sad.png", "surprise": "chars/tang_surprise.png"}}}, "assets_dir": "assets/", "scenes": [{"id": "s1_ferry", "background": "bg/ferry_night.jpg", "bgm": {"src": "bgm/rain_night.mp3", "start": 12.5, "end": 45.0, "loop": true, "fade_in": 1.0, "fade_out": 1.0, "volume": 0.8}, "sfx": ["sfx/rain_loop.wav", "sfx/boat_creak.wav"], "checkpoint": true, "chars": [], "script": [{"type": "narrate", "text": "雨是从过鹰嘴崖那年开始下的，下到你离开灯溪镇，又下到你回来。"}, {"type": "narrate", "text": "渡船在河心晃。艄公披着蓑衣蹲在船尾，灯影碎在水面上，像一把被打散的金箔。"}, {"type": "narrate", "text": "三年前你也是在这样的夜里走的。怀里那盏没做完的兔子灯，如今躺在行李最底下，竹骨都泛黄了。"}, {"type": "narrate", "text": "船头没有人同行。只有我提着灯，看渡口那一点光慢慢近了。"}, {"type": "choice", "options": [{"text": "起身帮艄公拽住被风掀起的篷布", "set": {"charm": "charm+2", "flag_ferry_hand": 1}, "goto": "s1_tea"}, {"text": "裹紧斗篷，把那点近乡情怯按回心底", "set": {"flag_ferry_quiet": 1}, "goto": "s1_tea"}]}]}, {"id": "s1_tea", "background": "bg/teashelter.jpg", "bgm": "bgm/teashelter.mp3", "sfx": ["sfx/rain_on_roof.wav"], "chars": [{"id": "tang", "pos": "center", "sprite": "normal", "effect": "fade"}], "script": [{"type": "narrate", "text": "渡口的茶棚还亮着灯。雨帘把灯火泡得发胀，像一枚温热的橘子。"}, {"type": "say", "who": "tang", "text": "这位客官，雨大，进来坐坐吧。……诶？"}, {"type": "say", "who": "tang", "text": "是你。真的是你——阿灯。你走的时候，这茶棚的招牌还没换过呢。"}, {"type": "narrate", "text": "她把你按到最靠里的位置，袖口带起一阵炒茶的暖香。三年不见，她擦桌子的手势还是那样，先画半圈，再画半圈。"}, {"type": "inspect", "x": 0.42, "y": 0.62, "w": 0.16, "h": 0.18, "show": {"image": "cg/teacup.png", "text": "粗陶茶盏，盏沿有一道旧磕痕。你认得它——走之前那个晚上，你用这只盏喝过最后一盏茶。她居然还留着，还摆在手边最常用的位置。"}}, {"type": "say", "who": "tang", "text": "雨一时停不了。茶是今春的新茶，水刚开——你先暖暖手，别说话，让我先看够。"}, {"type": "choice", "options": [{"text": "“这只盏……你还留着。”", "set": {"favor_tang": "favor_tang+3", "flag_teacup": 1}, "goto": "s1_lantern"}, {"text": "“招牌换了新的？字迹倒像你的。”", "set": {"favor_tang": "favor_tang+1", "charm": "charm+2"}, "goto": "s1_lantern"}, {"text": "默默喝茶，听她讲这三年镇上的事", "set": {"favor_tang": "favor_tang+2"}, "goto": "s1_lantern"}]}]}, {"id": "s1_lantern", "background": "bg/lantern_shop.jpg", "bgm": "bgm/shop_warm.mp3", "chars": [{"id": "su", "pos": "right", "sprite": "surprise", "effect": "slide"}], "script": [{"type": "narrate", "text": "雨歇了。镇口灯笼铺的灯还亮着，满墙的纸灯笼把整条街烘成蜜色。"}, {"type": "say", "who": "su", "text": "——阿灯？！阿灯阿灯阿灯！你回来怎么不先告诉我！"}, {"type": "say", "who": "su", "text": "三年了！说好一年一封信，你数数你写了几封？两封！两封半！那半封还被雨淋花了！"}, {"type": "say", "who": "su", "text": "……算了。回来就好。"}, {"type": "narrate", "text": "她别过脸去，手指无意识地绕着一根竹篾。铺子里堆着半成品的灯笼骨架——三日后就是灯会，她一个人根本忙不完。"}, {"type": "choice", "options": [{"text": "卷起袖子：“这些灯骨，我帮你扎。”", "set": {"favor_su": "favor_su+5", "flag_help_lantern": 1}, "goto": "s2_prep"}, {"text": "取出行李里那盏泛黄的兔子灯：“你看，我带回来了。”", "set": {"favor_su": "favor_su+3", "charm": "charm+2", "flag_rabbit_lamp": 1}, "goto": "s2_prep"}, {"text": "“我先去渡口还阿棠的伞，回头再来。”", "set": {"favor_tang": "favor_tang+2", "favor_su": "favor_su-2"}, "goto": "s2_prep"}]}]}, {"id": "s2_prep", "background": "bg/town_day.jpg", "bgm": "bgm/town_day.mp3", "sfx": ["sfx/market_noise.wav"], "checkpoint": true, "chars": [{"id": "su", "pos": "left", "sprite": "smile", "effect": "fade"}, {"id": "tang", "pos": "right", "sprite": "normal", "effect": "fade"}], "script": [{"type": "narrate", "text": "三日后。灯会前的灯溪镇像一只被抖开的百宝匣，满街都是竹篾、糨糊和彩纸的味道。"}, {"type": "check", "attr": "charm", "op": ">=", "value": 15, "mode": "judge", "text": "魅力判定", "success": {"set": {"flag_charm_ok": 1}}}, {"type": "say", "who": "su", "text": "阿灯！主街这排灯架归我们铺子，扎完这排才算完——你可不许跑。"}, {"type": "say", "who": "tang", "text": "灯会那晚渡口人多，我打算把茶棚摆到桥头来。苏璃，给你留一盏最亮的挂棚口，好不好？"}, {"type": "say", "who": "su", "text": "要！要兔子形的！……阿灯你笑什么！"}, {"type": "choice", "options": [{"text": "帮苏璃扶梯挂灯，听她讲每盏灯的来历", "set": {"favor_su": "favor_su+4"}, "goto": "s2_makelight"}, {"text": "帮阿棠把茶棚的桌椅搬去桥头", "set": {"favor_tang": "favor_tang+4"}, "goto": "s2_makelight"}, {"text": "先满镇转一圈，看看灯会还有什么稀罕布置", "set": {"charm": "charm+2", "flag_explore": 1}, "goto": "s2_makelight"}]}]}, {"id": "s2_makelight", "background": "bg/lantern_shop.jpg", "bgm": "bgm/shop_warm.mp3", "chars": [{"id": "su", "x": 0.3, "y": 0.98, "sprite": "smile", "effect": "none"}, {"id": "tang", "x": 0.7, "y": 0.98, "sprite": "smile", "effect": "fade"}, {"id": "shen", "x": 0.5, "y": 0.9, "scale": 0.82, "sprite": "normal", "effect": "fade"}], "script": [{"type": "narrate", "text": "午后，灯笼铺里支起了长桌。苏璃教阿棠糊灯面，你负责扎骨。门口光线一暗——镇外独居的那位剑客路过，却停住了脚。"}, {"type": "say", "who": "su", "text": "沈青姐姐！进来坐呀，站门口做什么。"}, {"type": "say", "who": "shen", "text": "……路过。这盏鲤鱼灯的骨架，走线很稳。"}, {"type": "narrate", "text": "她说的正是你扎的那盏。目光在你手上的竹篾停了一瞬，像剑尖点水，随即移开。"}, {"type": "set", "vars": {"favor_shen": "favor_shen+3", "charm": "charm+3", "met_shen": 1}}, {"type": "say", "who": "tang", "text": "阿灯的手艺没落下呢。当年镇上都说，灯艺师的手，扎出来的灯自己会发光。"}, {"type": "say", "who": "su", "text": "那当然！也不看是谁的师……师姐！"}]}, {"id": "s2_bamboo", "background": "bg/bamboo.jpg", "bgm": "bgm/bamboo_wind.mp3", "sfx": ["sfx/sword_whoosh.wav", "sfx/bamboo_rustle.wav"], "chars": [{"id": "shen", "pos": "center", "sprite": "normal", "effect": "fade"}], "script": [{"type": "narrate", "text": "给镇西送灯样的路上，你绕进了镇外那片竹林。剑光先于人声到了。"}, {"type": "show", "image": "cg/sword_light.jpg"}, {"type": "narrate", "text": "一线青锋劈开雾气，竹叶簌簌地落，却在触及她衣袖之前齐齐偏开，像被剑意推开。"}, {"type": "set", "vars": {"favor_shen": "favor_shen+2", "flag_saw_sword": 1}}, {"type": "check", "attr": "favor_shen", "mode": "roll", "value": 15, "text": "沈青好感掷骰", "success": {"set": {"favor_shen": "favor_shen+5"}}}, {"type": "say", "who": "shen", "text": "看了多久了？"}, {"type": "say", "who": "shen", "text": "……不必紧张。能看清我刚才那一剑的人，镇上没有几个。你算一个。"}, {"type": "choice", "options": [{"text": "“最后一式收剑时，手腕松了半分。是旧伤？”", "set": {"favor_shen": "favor_shen+5", "flag_noticed_wound": 1}, "goto": "s2_festival_night"}, {"text": "不打扰她，把灯样挂在竹梢，静静看完整套剑再走", "set": {"favor_shen": "favor_shen+3", "charm": "charm+2"}, "goto": "s2_festival_night"}]}]}, {"id": "s2_festival_night", "background": "bg/festival_night.jpg", "bgm": "bgm/festival.mp3", "sfx": ["sfx/crowd_cheer.wav"], "chars": [], "script": [{"type": "narrate", "text": "灯会当夜。千盏灯一齐点起来的瞬间，整条河都成了流淌的星河。"}, {"type": "narrate", "text": "人潮在街口分开三个方向：灯笼铺前苏璃在朝这边张望，桥头茶棚阿棠收摊收得手忙脚乱，而镇外竹林的方向，有剑气挑开夜色。"}, {"type": "choice", "options": [{"text": "约苏璃逛灯会（苏璃好感≥15）", "goto": "s2_end_su", "if": "favor_su>=15"}, {"text": "提着新扎的灯，去竹林找沈青", "goto": "s2_find_shen"}, {"text": "去桥头帮阿棠收摊", "set": {"favor_tang": "favor_tang+3"}, "goto": "s2_end_tang"}]}]}, {"id": "s2_end_su", "background": "bg/festival_night.jpg", "chars": [{"id": "su", "pos": "center", "sprite": "smile", "effect": "fade"}], "script": [{"type": "say", "who": "su", "text": "你真的来啦。……那盏兔子灯，我偷偷挂在你铺子门口了，最高那盏。"}, {"type": "narrate", "text": "灯火落在她眼睛里。她伸手拉住你的袖口，像拉住一件失而复得的东西。"}, {"type": "goto", "target": "s3_placeholder"}]}, {"id": "s2_find_shen", "background": "bg/bamboo_night.jpg", "bgm": "bgm/bamboo_wind.mp3", "require": "charm>=15 && favor_shen>=10", "require_else": "s2_refused", "chars": [{"id": "shen", "pos": "center", "sprite": "normal", "effect": "fade"}], "script": [{"type": "narrate", "text": "竹林的灯比镇上暗，你的脚步却比预想的稳。她在竹影深处收剑回身，看见你手里的灯，没有赶人。"}, {"type": "say", "who": "shen", "text": "灯会不去看，来竹林做什么。……灯，是给我的？"}, {"type": "goto", "target": "s3_placeholder"}]}, {"id": "s2_refused", "background": "bg/bamboo_night.jpg", "bgm": "bgm/bamboo_wind.mp3", "chars": [], "script": [{"type": "narrate", "text": "竹林口挂着一方小小的木牌：「今夜不见客」。夜风穿林，剑声遥遥，你终究没有走进去。"}, {"type": "narrate", "text": "（魅力或沈青好感不足——回到灯会，或下一周目再叩这片竹影。）"}, {"type": "goto", "target": "s3_placeholder"}]}, {"id": "s2_end_tang", "background": "bg/teashelter_night.jpg", "chars": [{"id": "tang", "pos": "center", "sprite": "smile", "effect": "fade"}], "script": [{"type": "say", "who": "tang", "text": "就知道你会来。最后一盏茶，给你留的——还是那只盏。"}, {"type": "narrate", "text": "收完摊，她把棚口那盏兔子灯摘下来塞进你手里。灯纸上有她新写的字：欢迎回家。"}, {"type": "goto", "target": "s3_placeholder"}]}, {"id": "s3_placeholder", "background": "none", "bgm": "none", "chars": [], "script": [{"type": "narrate", "text": "【第二幕 完】灯会未尽，灯溪镇的故事还长——第三幕「灯火可亲」正在撰写中。当前数值：苏璃好感 {favor_su} / 沈青好感 {favor_shen} / 阿棠好感 {favor_tang} / 魅力 {charm}。"}, {"type": "end", "label": "幕间·灯火未阑"}]}]};
 
 /* ================= 全局状态 ================= */
 const $ = id => document.getElementById(id);
@@ -1328,11 +1357,93 @@ function run() {
       $('end-screen').classList.remove('hidden');
       break;
     }
+    case 'check': runCheck(cmd); break;
     default:
       console.warn('未知指令类型:', cmd.type);
       lineIdx++; run();
   }
 }
+/* ================= 判定指令 check ================= */
+/* check 是瞬时指令：结算（掷骰/比较 + success/fail 的 set）在进入时同步完成，
+   存档语义同 set/goto；overlay 只是演出，继续后才走 goto 或推进下一条。 */
+let pendingCheck = null;   // { finish, timer, rollTimer } —— 演出中才存在
+function compareOp(a, op, b) {
+  switch (op) {
+    case '>=': return a >= b; case '<=': return a <= b;
+    case '>': return a > b; case '<': return a < b;
+    case '==': return a == b; case '!=': return a != b;
+    default: return false;
+  }
+}
+function runCheck(cmd) {
+  const attrKey = cmd.attr || '';
+  const decl = (attrDecls() || {})[attrKey];
+  const cur = typeof vars[attrKey] === 'number' ? vars[attrKey] : (decl && decl.init || 0);
+  const mode = cmd.mode === 'roll' ? 'roll' : 'judge';
+  const target = typeof cmd.value === 'number' ? cmd.value : parseFloat(cmd.value) || 0;
+  let success, dice = null, total = null;
+  if (mode === 'roll') {
+    dice = 1 + Math.floor(Math.random() * 20);
+    total = dice + cur;
+    success = total >= target;              /* roll：d20 + 属性当前值 vs 难度 */
+  } else {
+    success = compareOp(cur, cmd.op || '>=', target);  /* judge：直接比较 */
+  }
+  const outcome = (success ? cmd.success : cmd.fail) || {};
+  if (outcome.set) applySet(outcome.set);   /* set 立即结算（存档一致） */
+  const done = () => {
+    pendingCheck = null; waiting = null;
+    if (outcome.goto) {
+      const t = script.scenes.findIndex(s => s.id === outcome.goto);
+      if (t >= 0) { stopVoice(); enterScene(t); return; }
+      console.warn('check 悬空 goto:', outcome.goto);
+    }
+    lineIdx++; run();
+  };
+  /* 跳过/快进模式：不播演出直接结算 */
+  if (skipMode || skipAllMode || ffMode) { done(); return; }
+  waiting = 'check';
+  showCheckOverlay(cmd, decl, attrKey, cur, { mode, target, success, dice, total }, done);
+}
+function showCheckOverlay(cmd, decl, attrKey, cur, r, done) {
+  const layer = $('check-layer');
+  $('check-title').textContent = cmd.text || ((decl && decl.name || attrKey) + '判定');
+  $('check-detail').textContent = (decl && decl.name || attrKey) + ' 当前 ' + cur +
+    (r.mode === 'roll' ? '　｜　掷骰：d20 + ' + cur + ' vs 难度 ' + r.target
+                      : '　｜　直接判定：要求 ' + (cmd.op || '>=') + ' ' + r.target);
+  const diceEl = $('check-dice'), resEl = $('check-result');
+  resEl.textContent = ''; resEl.className = '';
+  diceEl.classList.toggle('hidden', r.mode !== 'roll');
+  layer.classList.remove('hidden');
+  const pc = pendingCheck = { finish: done, timer: 0, rollTimer: 0 };
+  const reveal = () => {
+    if (pendingCheck !== pc) return;
+    if (r.mode === 'roll') diceEl.textContent = '🎲 ' + r.dice + ' + ' + cur + ' = ' + r.total;
+    resEl.textContent = r.success ? '判定成功' : '判定失败';
+    resEl.className = r.success ? 'ok' : 'ng';
+    pc.timer = setTimeout(finishCheck, 1600);   /* 1.6s 自动继续 */
+  };
+  if (r.mode === 'roll') {
+    /* 骰子滚动动画：数字快速跳变 0.8s 后定格 */
+    const t0 = Date.now();
+    pc.rollTimer = setInterval(() => {
+      if (Date.now() - t0 >= 800) { clearInterval(pc.rollTimer); pc.rollTimer = 0; reveal(); return; }
+      diceEl.textContent = '🎲 ' + (1 + Math.floor(Math.random() * 20));
+    }, 60);
+  } else {
+    reveal();   /* judge：翻牌式直接亮结果（CSS pop 动画） */
+  }
+  layer.onclick = () => finishCheck();
+}
+function finishCheck() {
+  const pc = pendingCheck;
+  if (!pc) return;
+  if (pc.timer) clearTimeout(pc.timer);
+  if (pc.rollTimer) clearInterval(pc.rollTimer);
+  $('check-layer').classList.add('hidden');
+  pc.finish();
+}
+
 function advance() {
   if (waiting !== 'advance') return;
   if (typing) { completeText(); return; }
@@ -1406,6 +1517,7 @@ function loadSlot(name) {
   sceneIdx = d.sceneIdx; lineIdx = d.lineIdx;
   $('choices').innerHTML = ''; $('hotspots').innerHTML = '';
   $('end-screen').classList.add('hidden');
+  pendingCheck = null;   /* 读档丢弃进行中的判定演出（check 已瞬时结算，快照存的是下一行） */
   closeAllPanels();
   history = []; waiting = null;
   run(); return true;
@@ -1427,19 +1539,56 @@ function renderSavePanel(forSave) {
     grid.appendChild(div);
   });
 }
+/* 主控显示名：玩家命名流程存在 vars.player_name，缺省「我」 */
+const playerDisplayName = () => vars.player_name || '我';
+/* 属性分组：主控（owner=player）/ 各归属角色 / 其它（无 owner，行为与旧版一致） */
+function attrGroups() {
+  const attrs = attrDecls() || {};
+  const groups = { player: [], chars: {}, other: [] };
+  Object.keys(attrs).forEach(k => {
+    const a = attrs[k];
+    if (a.owner === 'player') groups.player.push(k);
+    else if (a.owner && script.characters && script.characters[a.owner]) {
+      (groups.chars[a.owner] = groups.chars[a.owner] || []).push(k);
+    } else groups.other.push(k);
+  });
+  /* 好感类属性排前（key 含 favor 或显示名含「好感」） */
+  const favorFirst = arr => arr.sort((x, y) => {
+    const fx = /favor|好感/.test(x + (attrs[x].name || '')) ? 0 : 1;
+    const fy = /favor|好感/.test(y + (attrs[y].name || '')) ? 0 : 1;
+    return fx - fy;
+  });
+  favorFirst(groups.player);
+  Object.values(groups.chars).forEach(favorFirst);
+  favorFirst(groups.other);
+  return groups;
+}
 function renderAttrPanel() {
   const attrs = attrDecls() || {};
-  $('attr-list').innerHTML = Object.keys(attrs).map(k => {
+  const row = k => {
     const a = attrs[k]; const v = typeof vars[k] === 'number' ? vars[k] : (a.init || 0);
     const max = a.max !== undefined ? a.max : 100;
     const pct = Math.max(0, Math.min(100, v / max * 100));
     return '<div class="attr-row"><div class="attr-head"><span>' + (a.name || k) + '</span><span>' +
       (Math.round(v * 100) / 100) + ' / ' + max + '</span></div>' +
       '<div class="attr-bar"><div class="attr-fill" style="width:' + pct + '%;background:' + (a.bar || '#7fa0d0') + '"></div></div></div>';
-  }).join('');
+  };
+  const g = attrGroups();
+  let html = '';
+  if (g.player.length) {
+    html += '<div class="attr-group-head" data-group="player">🧑 ' + playerDisplayName() + '（主控）</div>' + g.player.map(row).join('');
+  }
+  Object.keys(g.chars).forEach(cid => {
+    const ch = script.characters[cid] || {};
+    html += '<div class="attr-group-head" data-group="' + cid + '" style="color:' + (ch.color || '#eee') + '">❤ ' + (ch.name || cid) + '</div>' + g.chars[cid].map(row).join('');
+  });
+  if (g.other.length) {
+    html += '<div class="attr-group-head" data-group="other">其它</div>' + g.other.map(row).join('');
+  }
+  $('attr-list').innerHTML = html;
 }
 function closeAllPanels() {
-  ['history-panel','settings-panel','save-panel','viewlayer','cglayer','attr-panel','sys-menu','gallery-screen','endings-screen','cg-viewer'].forEach(id => { const el = $(id); if (el) el.classList.add('hidden'); });
+  ['history-panel','settings-panel','save-panel','viewlayer','cglayer','attr-panel','sys-menu','gallery-screen','endings-screen','cg-viewer','check-layer'].forEach(id => { const el = $(id); if (el) el.classList.add('hidden'); });
   $('history-panel').classList.remove('open');
 }
 
@@ -1453,6 +1602,10 @@ function validate(sc) {
       if (cmd.type === 'goto' && !ids.has(cmd.target)) warns.push(`场景 ${s.id} 第${i+1}行：goto 目标 "${cmd.target}" 不存在`);
       if (cmd.type === 'say' && !sc.characters[cmd.who]) warns.push(`场景 ${s.id} 第${i+1}行：说话角色 "${cmd.who}" 未定义`);
       if (cmd.type === 'choice') cmd.options.forEach(o => { if (o.goto && !ids.has(o.goto)) warns.push(`场景 ${s.id} 第${i+1}行：选项 "${o.text}" 的 goto "${o.goto}" 不存在`); });
+      if (cmd.type === 'check') {
+        if (cmd.attr && sc.attrs && !sc.attrs[cmd.attr]) warns.push(`场景 ${s.id} 第${i+1}行：判定属性 "${cmd.attr}" 未在 attrs 声明`);
+        ['success','fail'].forEach(k => { const o = cmd[k]; if (o && o.goto && !ids.has(o.goto)) warns.push(`场景 ${s.id} 第${i+1}行：判定${k==='success'?'成功':'失败'}分支 goto "${o.goto}" 不存在`); });
+      }
     });
   });
   return warns;
@@ -1489,6 +1642,7 @@ async function startNewGame() {
 function backToTitle() {
   stopSkipAuto();
   stopVoice();
+  pendingCheck = null;
   if (curAudio) { fadeOut(curAudio, 500); curAudio = null; }
   curBgm = null;
   closeAllPanels();
@@ -1994,13 +2148,13 @@ function renderTimeline(sc) {
     b.textContent = '🔊'+(ssrc||'').replace('sfx/','').replace('.wav','');
     aBlocks.appendChild(b);
   });
-  // Other track: set, goto, end, show, inspect
+  // Other track: set, goto, end, show, inspect, check
   const oBlocks = document.querySelector('#tl-other .tl-blocks'); oBlocks.innerHTML = '';
   (sc.script||[]).forEach((cmd, idx) => {
-    if (!['set','goto','end','show','inspect'].includes(cmd.type)) return;
+    if (!['set','goto','end','show','inspect','check'].includes(cmd.type)) return;
     const b = document.createElement('div'); b.className = 'tl-block ' + cmd.type;
     b.style.left = (idx/total*100)+'%'; b.style.width = Math.max(4, (100/total))+'%';
-    b.textContent = cmd.type==='set'?'⚙'+Object.keys(cmd.vars||{}).join(','):cmd.type==='goto'?'⏭'+cmd.target:cmd.type==='end'?'🏁'+cmd.label:cmd.type==='show'?'🖼CG':cmd.type==='inspect'?'🔍':'';
+    b.textContent = cmd.type==='set'?'⚙'+Object.keys(cmd.vars||{}).join(','):cmd.type==='goto'?'⏭'+cmd.target:cmd.type==='end'?'🏁'+cmd.label:cmd.type==='show'?'🖼CG':cmd.type==='inspect'?'🔍':cmd.type==='check'?'🎲'+(cmd.text||cmd.attr||'判定'):'';
     b.dataset.idx = idx;
     /* 逻辑轨色块同样可拖拽重排 */
     b.draggable = true;
@@ -2115,7 +2269,7 @@ function renderFrameStrip(sc) {
       if (entered.length) badges.push('▲' + entered.map(id => (script.characters[id] || {}).name || id).join(','));
       if (gone.length) badges.push('▼' + gone.map(id => (script.characters[id] || {}).name || id).join(','));
     }
-    const typeBadge = { show:'🖼', choice:'🔀', set:'⚙', goto:'⏭', end:'🏁', inspect:'🔍' }[cmd.type];
+    const typeBadge = { show:'🖼', choice:'🔀', set:'⚙', goto:'⏭', end:'🏁', inspect:'🔍', check:'🎲' }[cmd.type];
     if (typeBadge) badges.push(typeBadge);
     prevIds = ids;
     if (badges.length) {
@@ -2130,7 +2284,8 @@ function renderFrameStrip(sc) {
       cmd.type === 'goto' ? '⏭' + (cmd.target || '?') :
       cmd.type === 'end' ? '🏁' + (cmd.label || '') :
       cmd.type === 'show' ? '🖼' + (cmd.image || '').split('/').pop() :
-      cmd.type === 'inspect' ? '🔍调查' : cmd.type;
+      cmd.type === 'inspect' ? '🔍调查' :
+      cmd.type === 'check' ? '🎲' + (cmd.text || cmd.attr || '判定') : cmd.type;
     const te = document.createElement('div');
     te.className = 'fr-text'; te.textContent = txt;
     shot.appendChild(te);
@@ -2167,6 +2322,12 @@ function renderFrameStrip(sc) {
     } else if (cmd.type === 'choice') {
       (cmd.options || []).forEach(o => mkChip(o.goto ? '→ ' + o.goto : '继续', o.goto,
         v => { o.goto = v || undefined; if (!v) delete o.goto; }));
+    } else if (cmd.type === 'check') {
+      /* 判定帧卡：成功/失败两个跳转 chip（无跳转则顺序继续） */
+      [['✓', 'success'], ['✗', 'fail']].forEach(([mark, key]) => {
+        const o = cmd[key];
+        if (o && o.goto) mkChip(mark + '→ ' + o.goto, o.goto, v => { o.goto = v || undefined; if (!v) delete o.goto; });
+      });
     } else if (cmd.type === 'end') {
       const c = document.createElement('span');
       c.className = 'fr-chip end'; c.textContent = '🏁' + (cmd.label || '结局');
@@ -2280,6 +2441,10 @@ function previewLine(sc, idx) {
     overlay.classList.add('show'); namebox.classList.remove('show');
     textel.className = ''; textel.contentEditable = 'false';
     buildSetInline(cmd);
+  } else if (cmd.type === 'check') {
+    overlay.classList.add('show'); namebox.classList.remove('show');
+    textel.className = ''; textel.contentEditable = 'false';
+    buildCheckInline(cmd);
   } else if (cmd.type === 'end') {
     overlay.classList.add('show');
     namebox.classList.remove('show');
@@ -2358,9 +2523,31 @@ function buildChoiceInline(cmd) {
     ifChip.textContent = o.if ? '[' + o.if + ']' : '[条件]';
     ifChip.title = '点击配置该选项的可选条件';
     ifChip.onclick = function(ev) { ev.stopPropagation(); openCondBuilder(ifChip, o.if, function(expr) { o.if = expr || undefined; previewLine(script.scenes[edSceneIdx], edPreviewLine); }); };
+    /* ❤ 快速好感判定：一键加「好感≥X」条件（自动选当前场景在场角色的第一个归属属性，值可改） */
+    var favChip = document.createElement('span');
+    favChip.className = 'opt-chip cond';
+    favChip.textContent = '❤判定';
+    favChip.title = '一键加「好感≥X」条件：自动选当前场景在场角色的第一个好感属性';
+    favChip.onclick = function(ev) {
+      ev.stopPropagation();
+      var attrs2 = script.attrs || {};
+      var sceneCids = ((script.scenes[edSceneIdx]||{}).chars||[]).map(function(c){return c.id;});
+      var favKey = Object.keys(attrs2).find(function(k) {
+        var a = attrs2[k];
+        return a.owner && sceneCids.indexOf(a.owner) >= 0 && /favor|好感/.test(k + (a.name||''));
+      }) || Object.keys(attrs2).find(function(k) {
+        var a = attrs2[k];
+        return a.owner && sceneCids.indexOf(a.owner) >= 0;
+      });
+      if (!favKey) { favChip.textContent = '在场角色无归属属性'; setTimeout(function(){ favChip.textContent = '❤判定'; }, 1200); return; }
+      var v = prompt('「' + (attrs2[favKey].name || favKey) + '」达到多少可选项？', '10');
+      if (v === null) return;
+      o.if = favKey + '>=' + (parseFloat(v) || 0);
+      previewLine(script.scenes[edSceneIdx], edPreviewLine);
+    };
     var delBtn = document.createElement('span'); delBtn.textContent = '✕'; delBtn.className = 'opt-del';
     delBtn.onclick = function(){ cmd.options.splice(i,1); selectEditorScene(edSceneIdx); previewLine(script.scenes[edSceneIdx],edPreviewLine); };
-    row.appendChild(num); row.appendChild(inp); row.appendChild(gotoChip); row.appendChild(setChip); row.appendChild(ifChip);
+    row.appendChild(num); row.appendChild(inp); row.appendChild(gotoChip); row.appendChild(setChip); row.appendChild(ifChip); row.appendChild(favChip);
     if (cmd.options.length>1) row.appendChild(delBtn);
     div.appendChild(row);
   });
@@ -2452,6 +2639,74 @@ function buildSetInline(cmd) {
   addBtn.style.cssText = 'font-size:.65em;padding:2px 6px';
   addBtn.onclick = function() { rows.push({ k:Object.keys(script.attrs||{})[0]||'new_var', op:'+', val:'1' }); rebuild(); };
   div.appendChild(itemBtns); div.appendChild(addBtn);
+  box.appendChild(div);
+}
+
+/* check 判定可视化编辑：属性/模式/比较符/数值 + 成功/失败 chip（场景网格，可清空）+ 可选 set 行 */
+function buildCheckInline(cmd) {
+  var box = $('se-pv-text'); box.innerHTML = '';
+  var div = document.createElement('div'); div.style.cssText = 'font-size:.85em';
+  div.innerHTML = '<b>🎲 判定</b> <span style="opacity:.5;font-size:.8em">属性+条件直接改；chip 配成功/失败分支；双击=高级表单</span>';
+  var refresh = function() { previewLine(script.scenes[edSceneIdx], edPreviewLine); renderTimeline(script.scenes[edSceneIdx]); };
+
+  /* 标题行 */
+  var titleRow = document.createElement('div'); titleRow.style.cssText = 'margin:3px 0';
+  var titleInp = document.createElement('input'); titleInp.className = 'ck-text opt-text';
+  titleInp.value = cmd.text || ''; titleInp.placeholder = '判定标题（缺省「{属性名}判定」）';
+  titleInp.onchange = function() { cmd.text = this.value || undefined; if (!this.value) delete cmd.text; renderTimeline(script.scenes[edSceneIdx]); };
+  titleRow.appendChild(titleInp); div.appendChild(titleRow);
+
+  /* 条件行：属性下拉 + 模式下拉 + 比较符 + 数值 */
+  var row = document.createElement('div'); row.style.cssText = 'display:flex;gap:4px;align-items:center;margin:3px 0;flex-wrap:wrap';
+  var attrs = script.attrs || {};
+  var attrSel = document.createElement('select'); attrSel.className = 'ck-attr';
+  attrSel.style.cssText = 'padding:2px;background:#0c1120;color:#eee;border:1px solid #5a7bb0;border-radius:3px;font-size:.85em';
+  var keys = Object.keys(attrs);
+  if (cmd.attr && !keys.includes(cmd.attr)) keys.push(cmd.attr);
+  if (!keys.length) keys.push('favor');
+  keys.forEach(function(k) { var o = document.createElement('option'); o.value = k; o.textContent = attrs[k] ? (attrs[k].name || k) : k; if (k === cmd.attr) o.selected = true; attrSel.appendChild(o); });
+  attrSel.onchange = function() { cmd.attr = this.value; refresh(); };
+  var modeSel = document.createElement('select'); modeSel.className = 'ck-mode';
+  modeSel.style.cssText = attrSel.style.cssText;
+  [['judge','直接判定'],['roll','掷骰 d20']].forEach(function(p) { var o = document.createElement('option'); o.value = p[0]; o.textContent = p[1]; if ((cmd.mode||'judge') === p[0]) o.selected = true; modeSel.appendChild(o); });
+  modeSel.onchange = function() { cmd.mode = this.value; if (cmd.mode === 'judge') delete cmd.mode; refresh(); };
+  var opSel = document.createElement('select'); opSel.className = 'ck-op';
+  opSel.style.cssText = attrSel.style.cssText;
+  ['>=','<=','==','!=','>','<'].forEach(function(p) { var o = document.createElement('option'); o.value = p; o.textContent = p; if ((cmd.op||'>=') === p) o.selected = true; opSel.appendChild(o); });
+  opSel.onchange = function() { cmd.op = this.value; refresh(); };
+  var valInp = document.createElement('input'); valInp.className = 'ck-val'; valInp.type = 'number';
+  valInp.value = cmd.value !== undefined ? cmd.value : 10; valInp.style.cssText = 'width:64px;padding:2px;background:#0c1120;color:#eee;border:1px solid #5a7bb0;border-radius:3px;font-size:.85em';
+  valInp.title = '直接判定=比较值；掷骰=难度';
+  valInp.onchange = function() { cmd.value = parseFloat(this.value) || 0; refresh(); };
+  row.appendChild(attrSel); row.appendChild(modeSel); row.appendChild(opSel); row.appendChild(valInp);
+  if ((cmd.mode||'judge') === 'roll') { opSel.style.display = 'none'; }  /* 掷骰固定 >= 难度 */
+  div.appendChild(row);
+
+  /* 成功/失败分支行：goto chip（场景网格，可清空）+ set chip */
+  var sceneItems = [{ value:'', label:'(清空跳转)', icon:'✕' }].concat(sceneGridItems(false));
+  [['success','✓ 成功','#8fd18f'], ['fail','✗ 失败','#c0c6d0']].forEach(function(def) {
+    var key = def[0];
+    cmd[key] = cmd[key] || {};
+    var o = cmd[key];
+    var r2 = document.createElement('div'); r2.style.cssText = 'display:flex;gap:4px;align-items:center;margin:3px 0;flex-wrap:wrap';
+    var lb = document.createElement('span'); lb.style.cssText = 'font-size:.8em;width:4.5em;color:' + def[2]; lb.textContent = def[1];
+    var gotoChip = document.createElement('span');
+    gotoChip.className = 'opt-chip goto ck-' + key + (o.goto ? '' : ' empty');
+    gotoChip.textContent = o.goto ? '→ ' + o.goto : '顺序继续';
+    gotoChip.title = '点击选择' + def[1] + '后跳转的场景（可选「清空跳转」）';
+    gotoChip.onclick = function(ev) {
+      ev.stopPropagation();
+      openAssetGrid(gotoChip, { title: def[1] + '后跳转场景', items: sceneItems, current: o.goto || '',
+        onPick: function(v) { if (v) o.goto = v; else delete o.goto; refresh(); } });
+    };
+    var setChip = document.createElement('span');
+    setChip.className = 'opt-chip set ck-' + key + '-set' + (o.set ? '' : ' empty');
+    setChip.textContent = o.set && Object.keys(o.set).length ? '{' + Object.keys(o.set).join(',') + '}' : '{变量}';
+    setChip.title = '点击配置' + def[1] + '后执行的变量修改';
+    setChip.onclick = function(ev) { ev.stopPropagation(); openSetEditor(setChip, o, refresh); };
+    r2.appendChild(lb); r2.appendChild(gotoChip); r2.appendChild(setChip);
+    div.appendChild(r2);
+  });
   box.appendChild(div);
 }
 
@@ -2593,6 +2848,7 @@ function renderEditorScript(sc) {
       case 'say': summary = '💬 <b>'+(script.characters[cmd.who]||{}).name+'</b>: '+(cmd.text||'').slice(0,35); break;
       case 'choice': summary = '🔀 选择 ('+(cmd.options||[]).length+'个分支)'; break;
       case 'set': summary = '⚙ '+Object.keys(cmd.vars||{}).map(k=>k+'='+(cmd.vars[k])).join(', '); break;
+      case 'check': summary = '🎲 判定: '+(cmd.text||cmd.attr||'')+(cmd.mode==='roll'?'（掷骰 vs '+cmd.value+'）':' '+(cmd.op||'>=')+' '+cmd.value); break;
       case 'goto': summary = '⏭ 跳转到 → <b>'+cmd.target+'</b>'; break;
       case 'end': summary = '🏁 结局: '+cmd.label; break;
       case 'show': summary = '🖼 CG展示: '+cmd.image; break;
@@ -2616,7 +2872,7 @@ function renderEditorScript(sc) {
   const addBar = document.createElement('div');
   addBar.style.cssText = 'margin-top:.4em;display:flex;flex-wrap:wrap;gap:2px';
   const btns = [
-    ['💬对白','say'],['📖旁白','narrate'],['🔀选择','choice'],['⚙变量','set'],['⏭跳转','goto'],['🏁结局','end'],['🖼CG','show'],['🔍调查','inspect']
+    ['💬对白','say'],['📖旁白','narrate'],['🔀选择','choice'],['⚙变量','set'],['🎲判定','check'],['⏭跳转','goto'],['🏁结局','end'],['🖼CG','show'],['🔍调查','inspect']
   ];
   btns.forEach(([label, type]) => {
     const b = document.createElement('button');
@@ -2626,6 +2882,7 @@ function renderEditorScript(sc) {
       const defaults = {
         narrate:{type:'narrate',text:''}, say:{type:'say',who:Object.keys(script.characters)[0]||'',text:''},
         choice:{type:'choice',options:[{text:'选项1',goto:''}]}, set:{type:'set',vars:{}},
+        check:{type:'check',attr:Object.keys(script.attrs||{})[0]||'favor',op:'>=',value:10,mode:'judge',text:''},
         goto:{type:'goto',target:''}, end:{type:'end',label:''}, show:{type:'show',image:''},
         inspect:{type:'inspect',x:0.5,y:0.5,w:0.1,h:0.1,show:{text:''}}
       };
@@ -2686,6 +2943,24 @@ function showCmdForm(sc, i) {
       formHTML += '</div><button id="cf-add-var" class="btn small">+ 变量</button>';
       formHTML += `<input id="cf-if" placeholder="条件(可选)" value="${(cmd.if||'').replace(/"/g,'&quot;')}" style="width:100%;margin:.3em 0;padding:.3em;background:#0c1120;color:#eee;border:1px solid #3a4a63">`;
       break;
+    case 'check': {
+      const attrKeys = Object.keys(script.attrs||{});
+      if (cmd.attr && !attrKeys.includes(cmd.attr)) attrKeys.push(cmd.attr);
+      const attrOpts = attrKeys.map(k=>`<option value="${k}" ${cmd.attr===k?'selected':''}>${(script.attrs||{})[k]?((script.attrs[k].name||k)):k}</option>`).join('');
+      formHTML += `判定标题:<input id="cf-text" value="${(cmd.text||'').replace(/"/g,'&quot;')}" placeholder="缺省 {属性名}判定" style="width:100%;margin:.3em 0;padding:.3em;background:#0c1120;color:#eee;border:1px solid #3a4a63">`;
+      formHTML += `属性:<select id="cf-attr" style="padding:.3em;background:#0c1120;color:#eee;border:1px solid #3a4a63">${attrOpts}</select>
+        模式:<select id="cf-mode" style="padding:.3em;background:#0c1120;color:#eee;border:1px solid #3a4a63"><option value="judge" ${(cmd.mode||'judge')==='judge'?'selected':''}>直接判定</option><option value="roll" ${cmd.mode==='roll'?'selected':''}>掷骰 d20</option></select>
+        比较:<select id="cf-op" style="padding:.3em;background:#0c1120;color:#eee;border:1px solid #3a4a63">${['>=','<=','==','!=','>','<'].map(o=>`<option ${((cmd.op||'>=')===o)?'selected':''}>${o}</option>`).join('')}</select>
+        数值:<input id="cf-value" type="number" value="${cmd.value!==undefined?cmd.value:10}" style="width:70px;padding:.3em;background:#0c1120;color:#eee;border:1px solid #3a4a63"><br>`;
+      ['success','fail'].forEach(k => {
+        const o = cmd[k] || {};
+        formHTML += `<div style="border:1px solid #3a4a63;margin:.2em 0;padding:.3em;border-radius:3px">${k==='success'?'✓ 成功':'✗ 失败'}:
+          跳转到 <select id="cf-${k}-goto" style="padding:.2em;background:#0c1120;color:#eee;border:1px solid #3a4a63"><option value="">(顺序继续)</option>${ids.map(s=>`<option value="${s}" ${o.goto===s?'selected':''}>${s}</option>`).join('')}</select>
+          set <input id="cf-${k}-set" placeholder='{"favor":"favor+5"}' value="${o.set?JSON.stringify(o.set).replace(/"/g,'&quot;'):''}" style="width:40%;padding:.2em;background:#0c1120;color:#eee;border:1px solid #3a4a63"></div>`;
+      });
+      formHTML += `<input id="cf-if" placeholder="条件(可选)" value="${(cmd.if||'').replace(/"/g,'&quot;')}" style="width:100%;margin:.3em 0;padding:.3em;background:#0c1120;color:#eee;border:1px solid #3a4a63">`;
+      break;
+    }
     case 'goto':
       formHTML += `<select id="cf-target" style="width:100%;margin:.3em 0;padding:.3em;background:#0c1120;color:#eee;border:1px solid #3a4a63"><option value="">(选择)</option>${sceneOpts}</select>`;
       formHTML += `<input id="cf-if" placeholder="条件(可选)" value="${(cmd.if||'').replace(/"/g,'&quot;')}" style="width:100%;margin:.3em 0;padding:.3em;background:#0c1120;color:#eee;border:1px solid #3a4a63">`;
@@ -2746,6 +3021,24 @@ function showCmdForm(sc, i) {
         break;
       }
       case 'goto': cmd.target = box.querySelector('#cf-target').value; cmd.if = box.querySelector('#cf-if')?.value || undefined; break;
+      case 'check': {
+        cmd.text = box.querySelector('#cf-text').value || undefined; if (!cmd.text) delete cmd.text;
+        cmd.attr = box.querySelector('#cf-attr').value;
+        const mode = box.querySelector('#cf-mode').value;
+        cmd.mode = mode === 'judge' ? undefined : mode; if (!cmd.mode) delete cmd.mode;
+        cmd.op = box.querySelector('#cf-op').value;
+        cmd.value = parseFloat(box.querySelector('#cf-value').value) || 0;
+        ['success','fail'].forEach(k => {
+          const g = box.querySelector('#cf-' + k + '-goto').value;
+          const s = box.querySelector('#cf-' + k + '-set').value;
+          const o = {};
+          if (g) o.goto = g;
+          if (s) { try { o.set = JSON.parse(s); } catch(e) { /* 保留原样 */ if (cmd[k] && cmd[k].set) o.set = cmd[k].set; } }
+          if (Object.keys(o).length) cmd[k] = o; else delete cmd[k];
+        });
+        cmd.if = box.querySelector('#cf-if')?.value || undefined;
+        break;
+      }
       case 'end': cmd.label = box.querySelector('#cf-label').value; break;
       case 'show': cmd.image = box.querySelector('#cf-image').value; break;
       case 'inspect':
@@ -2874,6 +3167,12 @@ function showAttrEditor() {
   script.attrs = attrs;
   $('attr-editor-overlay').classList.remove('hidden');
   const renderRows = () => {
+    /* 归属下拉选项：主控 / 各角色 / 无（缺省「主控」为新建属性的默认归属） */
+    const ownerOpts = cur =>
+      `<option value="player" ${cur==='player'?'selected':''}>主控</option>` +
+      Object.keys(script.characters||{}).map(cid =>
+        `<option value="${cid}" ${cur===cid?'selected':''}>${script.characters[cid].name||cid}</option>`).join('') +
+      `<option value="" ${!cur?'selected':''}>无</option>`;
     list.innerHTML = Object.entries(attrs).map(([key, a]) => `
       <div style="border:1px solid #3a4a63;border-radius:4px;padding:.5em;margin:.3em 0;background:#0f1420">
         <b>${key}</b>
@@ -2884,6 +3183,7 @@ function showAttrEditor() {
           <input value="${a.max||100}" data-key="${key}" data-f="max" type="number" placeholder="最大" style="width:50px;padding:.2em;background:#0c1120;color:#eee;border:1px solid #3a4a63;font-size:.8em">
           <input value="${a.bar||''}" data-key="${key}" data-f="bar" placeholder="颜色#RRGGBB" style="width:80px;padding:.2em;background:#0c1120;color:#eee;border:1px solid #3a4a63;font-size:.8em">
           <input value="${a.bind?Object.entries(a.bind).map(([k,v])=>k+':'+v).join(','):''}" data-key="${key}" data-f="bind" placeholder="联动(格式:key:倍率)" style="width:120px;padding:.2em;background:#0c1120;color:#eee;border:1px solid #3a4a63;font-size:.8em">
+          <select data-key="${key}" data-f="owner" title="归属" style="padding:.2em;background:#0c1120;color:#eee;border:1px solid #3a4a63;font-size:.8em">${ownerOpts(a.owner)}</select>
           <button data-key="${key}" data-del="1" style="color:#c44;font-size:.7em">✕</button>
         </div>
       </div>`).join('');
@@ -2904,6 +3204,15 @@ function showAttrEditor() {
         }
       };
     });
+    // Wire owner selects
+    list.querySelectorAll('select[data-f="owner"]').forEach(sel => {
+      sel.onchange = () => {
+        const k = sel.dataset.key;
+        if (!attrs[k]) return;
+        if (sel.value) attrs[k].owner = sel.value;
+        else delete attrs[k].owner;   /* 无 owner = 旧行为 */
+      };
+    });
     // Wire delete buttons
     list.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { delete attrs[b.dataset.key]; renderRows(); });
   };
@@ -2911,7 +3220,7 @@ function showAttrEditor() {
   $('attr-add').onclick = () => {
     const key = prompt('属性ID (英文, 如 gold):');
     if (!key) return;
-    attrs[key] = { name: key, init: 0, min: 0, max: 100 };
+    attrs[key] = { name: key, init: 0, min: 0, max: 100, owner: 'player' };  /* 新建默认归属主控 */
     renderRows();
   };
   $('attr-editor-close').onclick = () => $('attr-editor-overlay').classList.add('hidden');
@@ -3075,7 +3384,7 @@ function renderInsertGaps(sc) {
 function openCmdPalette(anchorEl, insertAt) {
   const types = [
     ['💬','对白','say'], ['📖','旁白','narrate'], ['🔀','选项','choice'], ['⚙','变量','set'],
-    ['⏭','跳转','goto'], ['🏁','结局','end'], ['🖼','CG','show'], ['🔍','调查','inspect']
+    ['🎲','判定','check'], ['⏭','跳转','goto'], ['🏁','结局','end'], ['🖼','CG','show'], ['🔍','调查','inspect']
   ];
   openAssetGrid(anchorEl, {
     title: '在第 ' + insertAt + ' 条后插入指令',
@@ -3087,6 +3396,7 @@ function openCmdPalette(anchorEl, insertAt) {
       const defaults = {
         narrate:{type:'narrate',text:''}, say:{type:'say',who:Object.keys(script.characters)[0]||'',text:''},
         choice:{type:'choice',options:[{text:'选项1'}]}, set:{type:'set',vars:{}},
+        check:{type:'check',attr:Object.keys(script.attrs||{})[0]||'favor',op:'>=',value:10,mode:'judge',text:''},
         goto:{type:'goto',target:''}, end:{type:'end',label:'新结局'}, show:{type:'show',image:''},
         inspect:{type:'inspect',x:0.5,y:0.5,w:0.1,h:0.1,show:{text:''}}
       };
@@ -3140,6 +3450,25 @@ function openSetEditor(anchorEl, opt, onDone) {
   box.appendChild(add); box.appendChild(done);
   openSePop(anchorEl, box);
 }
+/* 属性下拉分组填充：「❤好感」（归属角色的属性）置顶，「主控」次之，其它最后；
+   好感组选项名前加 ❤。供条件构造器/判定编辑等共用。 */
+function fillAttrSelectGrouped(sel, attrs, current) {
+  const favor = [], player = [], other = [];
+  Object.keys(attrs).forEach(k => {
+    const a = attrs[k];
+    if (a.owner === 'player') player.push(k);
+    else if (a.owner && script.characters && script.characters[a.owner]) favor.push(k);
+    else other.push(k);
+  });
+  if (current && !Object.keys(attrs).includes(current)) other.push(current);  /* 未声明变量兜底 */
+  const mk = (k, prefix) => { const o = document.createElement('option'); o.value = k; o.textContent = prefix + (attrs[k] ? (attrs[k].name || k) : k); if (k === current) o.selected = true; return o; };
+  [['❤好感', favor, '❤ '], ['🧑 主控', player, ''], ['其它', other, '']].forEach(([label, keys, prefix]) => {
+    if (!keys.length) return;
+    const g = document.createElement('optgroup'); g.label = label;
+    keys.forEach(k => g.appendChild(mk(k, prefix)));
+    sel.appendChild(g);
+  });
+}
 /* ---- [条件] chip 的条件构造器：属性 比较符 数值，且/或 双条件 ---- */
 function openCondBuilder(anchorEl, expr, onSave) {
   const attrs = script.attrs || {};
@@ -3166,11 +3495,9 @@ function openCondBuilder(anchorEl, expr, onSave) {
         rowsDiv.appendChild(j);
       }
       const row = document.createElement('div'); row.className = 'cb-row';
-      const keys = attrKeys.slice();
-      if (r.k && !keys.includes(r.k)) keys.push(r.k);
       const as = document.createElement('select'); as.className = 'cb-attr' + (i === 0 ? '' : '2');
       if (i === 0) as.id = 'cb-attr';
-      keys.forEach(k => { const o = document.createElement('option'); o.value = k; o.textContent = attrs[k] ? (attrs[k].name || k) : k; if (k === r.k) o.selected = true; as.appendChild(o); });
+      fillAttrSelectGrouped(as, attrs, r.k);   /* 分组：❤好感 → 主控 → 其它 */
       as.onchange = () => r.k = as.value;
       const op = document.createElement('select'); op.className = 'cb-op'; if (i === 0) op.id = 'cb-op';
       ['>=','<=','==','!=','>','<'].forEach(o2 => { const o = document.createElement('option'); o.value = o2; o.textContent = o2; if (o2 === r.op) o.selected = true; op.appendChild(o); });
@@ -3699,7 +4026,7 @@ function bindUI() {
       loadScript(res.script);
     } catch (e) { alert('内置示例编译失败：\n' + e.message); }
   };
-  const onAdvanceClick = ev => { unlockAudio(); if (waiting === 'advance') advance(); };
+  const onAdvanceClick = ev => { unlockAudio(); if (waiting === 'check') { finishCheck(); return; } if (waiting === 'advance') advance(); };
   $('dlg').onclick = onAdvanceClick;
   $('stage').onclick = ev => { if (ev.target === $('stage') || ev.target.classList.contains('bg') || ev.target.classList.contains('slot')) onAdvanceClick(ev); };
   const ffStart = ev => { if (waiting === 'advance' && !typing) { ffMode = true; advance(); } };

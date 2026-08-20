@@ -310,7 +310,7 @@ Compiler.prototype.parseCharDef = function (n, line) {
 
 Compiler.prototype.parseAttrDef = function (n, line) {
   var toks = splitArgs(line.slice(3).trim(), n);
-  if (toks.length < 6) throw new CompileError(n, '%属性 格式：%属性 <id> <显示名> <初值> <最小> <最大> <颜色>');
+  if (toks.length < 6) throw new CompileError(n, '%属性 格式：%属性 <id> <显示名> <初值> <最小> <最大> <颜色> [@归属]');
   var aid = toks[0], name = toks[1];
   if (!ID_RE.test(aid)) throw new CompileError(n, '属性 id "' + aid + '" 只能含英文字母/数字/下划线');
   if (aid in this.attrs)
@@ -318,7 +318,16 @@ Compiler.prototype.parseAttrDef = function (n, line) {
   var init = parseFloat(toks[2]), lo = parseFloat(toks[3]), hi = parseFloat(toks[4]);
   if (isNaN(init) || isNaN(lo) || isNaN(hi))
     throw new CompileError(n, '%属性 的 初值/最小/最大 必须是数字：' + toks[2] + ' ' + toks[3] + ' ' + toks[4]);
-  this.attrs[aid] = { name: name, init: init, min: lo, max: hi, bar: toks[5], line: n };
+  var ownerRaw = null;
+  for (var i = 6; i < toks.length; i++) {
+    if (toks[i][0] === '@' && ownerRaw === null) {
+      ownerRaw = toks[i].slice(1);
+      if (!ownerRaw) throw new CompileError(n, '%属性 归属 @ 后缺少 主控/player/我/角色id');
+    } else {
+      throw new CompileError(n, '%属性 未知参数 "' + toks[i] + '"（归属写法：@主控 / @player / @我 / @角色id）');
+    }
+  }
+  this.attrs[aid] = { name: name, init: init, min: lo, max: hi, bar: toks[5], owner_raw: ownerRaw, line: n };
 };
 
 /* ---------- 场景头 ---------- */
@@ -388,6 +397,8 @@ Compiler.prototype.parseBody = function (n, line) {
     this.cur.script.push({ type: 'show', image: this.resolve('图', rest, n, this.warnings), _line: n });
   } else if (line.indexOf('!调查') === 0) {
     this.parseInspect(n, line.slice(3).trim());
+  } else if (line.indexOf('!判定') === 0) {
+    this.parseCheck(n, line.slice(3).trim());
   } else if (line.indexOf('->') === 0) {
     this.parseGoto(n, line.slice(2).trim());
   } else if (line.indexOf('::结局') === 0) {
@@ -530,6 +541,96 @@ Compiler.prototype.parseInspect = function (n, s) {
   this.cur.script.push(cmd);
 };
 
+/* ---------- 判定 ---------- */
+function num1(v) { var f = parseFloat(v); return f === Math.floor(f) ? Math.floor(f) : f; }
+
+Compiler.prototype.resolveAttr = function (n, token) {
+  /* 判定属性：可写 id 或显示名（同对白说话人规则）。未定义仅告警（运行时按 0）。 */
+  if (token in this.attrs) return token;
+  var ids = Object.keys(this.attrs);
+  for (var i = 0; i < ids.length; i++)
+    if (this.attrs[ids[i]].name === token) return ids[i];
+  this.warnings.push('第' + n + '行：!判定 引用的属性 "' + token + '" 未在 %属性 中定义（运行时按 0 处理）');
+  return token;
+};
+
+Compiler.prototype.attrDisplay = function (aid) {
+  return (aid in this.attrs) ? this.attrs[aid].name : aid;
+};
+
+Compiler.prototype.parseCheck = function (n, s) {
+  /* !判定 属性>=值 [成功->场景 {set}] [失败->场景 {set}] [行尾条件]
+     !判定 属性 难度N 掷骰 [成功/失败同上]   —— "掷骰" 关键词切换 roll 模式 */
+  // 1) 行尾 [条件] → if（与其它指令一致）
+  var cond = null;
+  var m = s.match(/\[([^\[\]]*)\]\s*$/);
+  if (m) {
+    cond = m[1].trim();
+    this.guardExpr(n, cond);
+    s = s.slice(0, m.index).trim();
+  }
+  // 2) 成功/失败 分段
+  var parts = s.split(/(成功|失败)/);
+  var head = parts[0].trim();
+  var branches = Object.create(null);
+  for (var i = 1; i < parts.length; i += 2) branches[parts[i]] = parts[i + 1];
+  // 3) 头部：judge = 属性op值；roll = 属性 难度N 掷骰
+  var attr = null, op = null, value = null, mode;
+  if (head.indexOf('掷骰') >= 0) {
+    mode = 'roll';
+    head = head.replace(/掷骰/g, ' ').trim();
+    var md = head.match(/难度\s*(-?\d+(?:\.\d+)?)/);
+    if (!md) throw new CompileError(n, '!判定 掷骰模式需要写 难度N（如：!判定 魅力 难度18 掷骰 成功->s_a 失败->s_b）');
+    value = num1(md[1]);
+    attr = (head.slice(0, md.index) + head.slice(md.index + md[0].length)).trim();
+    if (!attr) throw new CompileError(n, '!判定 缺少判定属性（如：!判定 魅力 难度18 掷骰 …）');
+  } else {
+    if (head.indexOf('难度') >= 0)
+      throw new CompileError(n, '难度N 只用于掷骰模式：!判定 属性 难度N 掷骰 …');
+    var mj = head.match(/^([^\s=<>!]+?)\s*(>=|<=|==|!=|>|<)\s*(-?\d+(?:\.\d+)?)\s*$/);
+    if (!mj) throw new CompileError(n, '!判定 格式：!判定 属性>=值 [成功->场景 {set}] [失败->场景 {set}]；掷骰：!判定 属性 难度N 掷骰 …');
+    mode = 'judge';
+    attr = mj[1]; op = mj[2]; value = num1(mj[3]);
+  }
+  attr = this.resolveAttr(n, attr);
+  // 4) 分支
+  var success = hasOwn(branches, '成功') ? this.parseCheckBranch(n, '成功', branches['成功']) : null;
+  var fail = hasOwn(branches, '失败') ? this.parseCheckBranch(n, '失败', branches['失败']) : null;
+  // 5) 按固定字段顺序组装（与 tsc.py 一致）
+  var cmd = { type: 'check', attr: attr };
+  if (op !== null) cmd.op = op;
+  cmd.value = value;
+  cmd.mode = mode;
+  cmd.text = this.attrDisplay(attr) + '判定';
+  if (success) cmd.success = success;
+  if (fail) cmd.fail = fail;
+  if (cond !== null) cmd.if = cond;
+  cmd._line = n;
+  this.cur.script.push(cmd);
+};
+
+Compiler.prototype.parseCheckBranch = function (n, key, body) {
+  /* 解析 成功/失败 后的内容：->场景 与 {变量操作}，任意顺序，可都省（=顺序继续）。 */
+  var out = {};
+  var rest = body;
+  var mg = rest.match(/->\s*([A-Za-z_][A-Za-z0-9_]*)/);
+  if (mg) {
+    out.goto = mg[1];
+    rest = rest.slice(0, mg.index) + rest.slice(mg.index + mg[0].length);
+  }
+  var ms = rest.match(/\{([^{}]*)\}/);
+  if (ms) {
+    var ops = this.trySetOps(ms[1]);
+    if (ops === null)
+      throw new CompileError(n, '!判定 ' + key + ' 的 {...} 变量操作无法解析：{' + ms[1] + '}');
+    out.set = ops;
+    rest = rest.slice(0, ms.index) + rest.slice(ms.index + ms[0].length);
+  }
+  if (rest.trim())
+    throw new CompileError(n, '!判定 ' + key + ' 后无法识别的内容：' + rest.trim() + '（支持 ->场景 与 {变量操作}）');
+  return Object.keys(out).length ? out : null;
+};
+
 /* ---------- 跳转 ---------- */
 Compiler.prototype.parseGoto = function (n, s) {
   var m = s.match(/^(\S+)(?:\s*\[([^\[\]]*)\])?\s*$/);
@@ -596,6 +697,16 @@ Compiler.prototype.validate = function () {
   var ids = Object.create(null);
   this.scenes.forEach(function (sc) { ids[sc.id] = true; });
 
+  /* 0) 属性归属解析：@主控/@player/@我 → player；@角色id → 该角色（须已定义） */
+  Object.keys(this.attrs).forEach(function (aid) {
+    var a = self.attrs[aid];
+    var raw = a.owner_raw;
+    if (raw === null || raw === undefined) return;
+    if (raw === '主控' || raw === 'player' || raw === '我') a.owner = 'player';
+    else if (raw in self.characters) a.owner = raw;
+    else self.err(a.line, '属性 "' + aid + '" 的归属 "@' + raw + '" 不是已定义的角色 id（主控写法：@主控 / @player / @我）');
+  });
+
   /* 1) 场景引用 */
   this.scenes.forEach(function (sc) {
     var ref = sc.require_else;
@@ -608,6 +719,12 @@ Compiler.prototype.validate = function () {
         cmd.options.forEach(function (o) {
           if ('goto' in o && !(o.goto in ids))
             self.err(o._line, '选项 -> 指向未定义的场景 "' + o.goto + '"');
+        });
+      if (cmd.type === 'check')
+        [['success', '成功'], ['fail', '失败']].forEach(function (bk) {
+          var br = cmd[bk[0]] || {};
+          if (br.goto && !(br.goto in ids))
+            self.err(cmd._line, '!判定 ' + bk[1] + ' 指向未定义的场景 "' + br.goto + '"');
         });
     });
   });
@@ -627,6 +744,10 @@ Compiler.prototype.validate = function () {
         else if (cmd.type === 'choice') {
           if (cmd.options.length && cmd.options.every(function (o) { return 'goto' in o; })) safe = true;
         }
+        else if (cmd.type === 'check') {
+          /* 成功/失败都带跳转且指令本身无条件：两条路都离场，不会跑出末尾 */
+          if (!('if' in cmd) && cmd.success && cmd.success.goto && cmd.fail && cmd.fail.goto) safe = true;
+        }
       }
       if (!safe)
         self.err(sc._line, '场景 "' + sc.id + '" 可能执行到末尾后卡死：请以 -> 跳转、' +
@@ -645,6 +766,10 @@ Compiler.prototype.validate = function () {
       sc.script.forEach(function (cmd) {
         if (cmd.type === 'goto') link(cmd.target);
         else if (cmd.type === 'choice') cmd.options.forEach(function (o) { if ('goto' in o) link(o.goto); });
+        else if (cmd.type === 'check') {
+          if (cmd.success && cmd.success.goto) link(cmd.success.goto);
+          if (cmd.fail && cmd.fail.goto) link(cmd.fail.goto);
+        }
       });
     });
     var seen = Object.create(null), stack = [this.scenes[0].id];
@@ -694,6 +819,10 @@ Compiler.prototype.validate = function () {
       if (cmd.type === 'set') Object.keys(cmd.vars).forEach(function (k) { usedVars[k] = true; });
       else if (cmd.type === 'choice')
         cmd.options.forEach(function (o) { Object.keys(o.set || {}).forEach(function (k) { usedVars[k] = true; }); });
+      else if (cmd.type === 'check')
+        ['success', 'fail'].forEach(function (bk) {
+          Object.keys((cmd[bk] || {}).set || {}).forEach(function (k) { usedVars[k] = true; });
+        });
     });
   });
   Object.keys(this.attrs).forEach(function (aid) {
@@ -715,6 +844,7 @@ Compiler.prototype.assemble = function () {
   Object.keys(this.attrs).forEach(function (aid) {
     var a = self.attrs[aid];
     attrs[aid] = { name: a.name, init: num(a.init), min: num(a.min), max: num(a.max), bar: a.bar };
+    if (a.owner) attrs[aid].owner = a.owner;   // 归属：player 或角色 id（仅影响面板分组）
   });
   var chars = {};
   Object.keys(this.characters).forEach(function (cid) {
@@ -811,6 +941,8 @@ var DEMO = `// ============================================================
 山门试炼，一剑问心。掌门端坐云台之上，莫师兄侍立一旁。
 掌门: 来者，报上你的道。
 你如今的修为是{xiuwei}，苏璃对你的好感是{favor}。
+!判定 xiuwei>=15 成功{flag_lingguang=1}
+你灵机一动，剑招比平日更顺了几分。 [flag_lingguang==1]
 ?
 > 拔剑问天 [xiuwei>=25] -> s_end_sword
 > 与苏璃归隐灯下 [favor>=12] -> s_end_love

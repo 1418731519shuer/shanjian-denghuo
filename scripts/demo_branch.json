@@ -269,6 +269,24 @@
           "text": "你如今的修为是{xiuwei}，苏璃对你的好感是{favor}。"
         },
         {
+          "type": "check",
+          "attr": "xiuwei",
+          "op": ">=",
+          "value": 15,
+          "mode": "judge",
+          "text": "修为判定",
+          "success": {
+            "set": {
+              "flag_lingguang": 1
+            }
+          }
+        },
+        {
+          "type": "narrate",
+          "text": "你灵机一动，剑招比平日更顺了几分。",
+          "if": "flag_lingguang==1"
+        },
+        {
           "type": "choice",
           "options": [
             {
