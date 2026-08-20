@@ -416,6 +416,13 @@ class Compiler:
             self.parse_check(n, line[3:].strip())
         elif line.startswith('->'):
             self.parse_goto(n, line[2:].strip())
+        elif line.startswith('::标签'):
+            mid = line[4:].strip()
+            if not mid or not re.match(r'^[A-Za-z0-9_\-]+$', mid):
+                raise CompileError(n, '::标签 缺少合法锚点 id（字母/数字/下划线/连字符）')
+            if any(c['type'] == 'mark' and c.get('id') == mid for c in self.cur['script']):
+                raise CompileError(n, f'本场景已存在同名锚点 "{mid}"')
+            self.cur['script'].append({'type': 'mark', 'id': mid, '_line': n})
         elif line.startswith('::结局'):
             label = line[4:].strip()
             if not label:
@@ -747,25 +754,52 @@ class Compiler:
                 self.err(a['line'], f'属性 "{aid}" 的归属 "@{raw}" 不是已定义的角色 id'
                                     '（主控写法：@主控 / @player / @我）')
 
-        # 1) 场景引用
+        # 1) 场景引用（支持锚点形式：场景id:锚点 / :锚点=同场景内）
+        marks = {sc['id']: {c.get('id') for c in sc['script'] if c['type'] == 'mark'}
+                 for sc in self.scenes}
+
+        def check_ref(ref, lineno, what):
+            if not ref:
+                return
+            scene_part, _, anchor = ref.partition(':')
+            sid = scene_part or None
+            if sid is None:
+                # :锚点 形式 → 同场景，逐个场景由调用方判定
+                return ('same', anchor)
+            if sid not in ids:
+                self.err(lineno, f'{what} 指向未定义的场景 "{sid}"')
+                return ('bad', None)
+            if anchor and anchor not in marks.get(sid, set()):
+                self.err(lineno, f'{what} 指向场景 "{sid}" 中不存在的锚点 "{anchor}"')
+                return ('bad', None)
+            return ('ok', None)
+
         for sc in self.scenes:
             ref = sc.get('require_else')
             if ref and ref not in ids:
                 self.err(sc['_require_else_line'],
                          f'条件跳转 指向未定义的场景 "{ref}"')
             for cmd in sc['script']:
-                if cmd['type'] == 'goto' and cmd['target'] not in ids:
-                    self.err(cmd['_line'], f'-> 跳转指向未定义的场景 "{cmd["target"]}"')
+                if cmd['type'] == 'goto' and cmd.get('target'):
+                    r = check_ref(cmd['target'], cmd['_line'], '-> 跳转')
+                    if r and r[0] == 'same' and r[1] not in marks.get(sc['id'], set()):
+                        self.err(cmd['_line'],
+                                 f'-> 跳转指向本场景不存在的锚点 "{r[1]}"')
                 if cmd['type'] == 'choice':
                     for o in cmd['options']:
-                        if 'goto' in o and o['goto'] not in ids:
-                            self.err(o['_line'], f'选项 -> 指向未定义的场景 "{o["goto"]}"')
+                        if 'goto' in o and o['goto']:
+                            r = check_ref(o['goto'], o['_line'], '选项 ->')
+                            if r and r[0] == 'same' and r[1] not in marks.get(sc['id'], set()):
+                                self.err(o['_line'],
+                                         f'选项 -> 指向本场景不存在的锚点 "{r[1]}"')
                 if cmd['type'] == 'check':
                     for bk, bname in (('success', '成功'), ('fail', '失败')):
                         br = cmd.get(bk) or {}
-                        if br.get('goto') and br['goto'] not in ids:
-                            self.err(cmd['_line'],
-                                     f'!判定 {bname} 指向未定义的场景 "{br["goto"]}"')
+                        if br.get('goto'):
+                            r = check_ref(br['goto'], cmd['_line'], f'!判定 {bname}')
+                            if r and r[0] == 'same' and r[1] not in marks.get(sc['id'], set()):
+                                self.err(cmd['_line'],
+                                         f'!判定 {bname} 指向本场景不存在的锚点 "{r[1]}"')
         if not self.errors:
             # 2) 场景收尾：执行不能跑出场景末尾（否则游戏卡死）
             for sc in self.scenes:
@@ -795,7 +829,10 @@ class Compiler:
                              '::结局 或「所有选项都带 ->」的选项块收尾')
 
         if not self.errors:
-            # 3) 结局可达性：从第一个场景出发 BFS
+            # 3) 结局可达性：从第一个场景出发 BFS（跳转目标统一剥掉 :锚点 部分）
+            def scene_of(ref):
+                return (ref or '').split(':')[0] or None
+
             adj = {sc['id']: set() for sc in self.scenes}
             for i, sc in enumerate(self.scenes):
                 if sc.get('require_else'):
@@ -804,23 +841,26 @@ class Compiler:
                     adj[sc['id']].add(self.scenes[i + 1]['id'])   # require 失败且无 else 时顺延
                 for cmd in sc['script']:
                     if cmd['type'] == 'goto':
-                        adj[sc['id']].add(cmd['target'])
+                        sid = scene_of(cmd.get('target'))
+                        if sid:
+                            adj[sc['id']].add(sid)   # ':锚点' 同场景跳转不产生新边
                     elif cmd['type'] == 'choice':
                         for o in cmd['options']:
-                            if 'goto' in o:
-                                adj[sc['id']].add(o['goto'])
+                            sid = scene_of(o.get('goto'))
+                            if sid:
+                                adj[sc['id']].add(sid)
                     elif cmd['type'] == 'check':
                         for bk in ('success', 'fail'):
-                            g = (cmd.get(bk) or {}).get('goto')
-                            if g:
-                                adj[sc['id']].add(g)
+                            sid = scene_of((cmd.get(bk) or {}).get('goto'))
+                            if sid:
+                                adj[sc['id']].add(sid)
             seen, stack = set(), [self.scenes[0]['id']]
             while stack:
                 cur = stack.pop()
                 if cur in seen:
                     continue
                 seen.add(cur)
-                stack.extend(adj.get(cur, ()) - seen)
+                stack.extend(adj.get(cur, set()) - seen)
             ends = [cmd['label'] for sc in self.scenes if sc['id'] in seen
                     for cmd in sc['script'] if cmd['type'] == 'end']
             if not ends:
@@ -1007,6 +1047,7 @@ def main():
     ap.add_argument('-o', '--out', help='输出 JSON 路径（默认与输入同名 .json）')
     ap.add_argument('--check', action='store_true', help='只校验，不写盘')
     ap.add_argument('--demo', action='store_true', help='打印内置示例文本脚本')
+    ap.add_argument('--append', metavar='已有JSON', help='多幕累计：把新场景合并进已有剧本 JSON（场景 id 冲突时报错）')
     args = ap.parse_args()
 
     if args.demo:
@@ -1030,7 +1071,31 @@ def main():
               f'{sum(1 for sc in script["scenes"] for c in sc["script"] if c["type"] == "end")} 个结局')
         return
 
-    out = args.out or os.path.splitext(args.script)[0] + '.json'
+    # --append：把新编译的场景合并进已有剧本（多幕累计更新）
+    if args.append:
+        with open(args.append, encoding='utf-8') as f:
+            base = json.load(f)
+        base_ids = {sc['id'] for sc in base.get('scenes', [])}
+        dup = [sc['id'] for sc in script['scenes'] if sc['id'] in base_ids]
+        if dup:
+            print(f'[错误] 新脚本场景与已有剧本冲突：{", ".join(dup)}（换个场景 id 前缀即可）',
+                  file=sys.stderr)
+            sys.exit(1)
+        # 角色/属性并集：新脚本里新定义的补充进来，冲突以已有为准并提示
+        for cid, c in (script.get('characters') or {}).items():
+            if cid not in base.get('characters', {}):
+                base.setdefault('characters', {})[cid] = c
+                print(f'[合并] 新角色并入：{c.get("name", cid)}（{cid}）')
+        for aid, a in (script.get('attrs') or {}).items():
+            if aid not in base.get('attrs', {}):
+                base.setdefault('attrs', {})[aid] = a
+                print(f'[合并] 新属性并入：{a.get("name", aid)}（{aid}）')
+        n_added = len(script['scenes'])
+        base['scenes'].extend(script['scenes'])
+        script = base
+        print(f'[合并] 追加 {n_added} 个新场景，合计 {len(script["scenes"])} 个')
+
+    out = args.out or (args.append if args.append else os.path.splitext(args.script)[0] + '.json')
     with open(out, 'w', encoding='utf-8') as f:
         json.dump(script, f, ensure_ascii=False, indent=2)
     n_end = sum(1 for sc in script['scenes'] for c in sc['script'] if c['type'] == 'end')

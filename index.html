@@ -1260,6 +1260,33 @@ function onTextDone() {
 }
 
 /* ================= 主执行循环 ================= */
+/* 跳转解析："sceneId" | "sceneId:anchor" | ":anchor"（同场景内） → {si, li} 或 {dangling} */
+function resolveJump(ref) {
+  if (!ref) return null;
+  const parts = String(ref).split(':');
+  const sceneId = parts.length > 1 ? (parts[0] || null) : parts[0];
+  const anchor = parts.length > 1 ? parts[1] : null;
+  const si = sceneId ? script.scenes.findIndex(s => s.id === sceneId) : sceneIdx;
+  if (si < 0) return { dangling: String(ref) };
+  let li = 0;
+  if (anchor) {
+    const mi = (script.scenes[si].script || []).findIndex(c => c.type === 'mark' && c.id === anchor);
+    if (mi < 0) return { dangling: String(ref) };
+    li = mi + 1;   /* 跳到标记之后那条 */
+  }
+  return { si, li };
+}
+/* 统一跳转执行：跨场景走 enterScene（带演出），同场景直接改行号 */
+function jumpTo(ref) {
+  const r = resolveJump(ref);
+  if (!r) return false;
+  if (r.dangling) { console.warn('悬空跳转:', r.dangling); return false; }
+  stopVoice();
+  if (r.si !== sceneIdx) enterScene(r.si, 0, r.li);   /* 带锚点落位（含 0=场景头） */
+  else { lineIdx = r.li; waiting = null; run(); }        /* 同场景内直接改行号 */
+  return true;
+}
+
 function run() {
   if (sceneIdx >= script.scenes.length) return;
   const scene = script.scenes[sceneIdx];
@@ -1303,10 +1330,10 @@ function run() {
       applySet(cmd.vars || {});
       lineIdx++; run(); break;
     case 'goto': {
-      const t = script.scenes.findIndex(s => s.id === cmd.target);
-      if (t < 0) { console.warn('悬空 goto:', cmd.target); lineIdx++; run(); return; }
-      stopVoice(); enterScene(t); break;
+      if (!jumpTo(cmd.target)) { lineIdx++; run(); }
+      break;
     }
+    case 'mark': { lineIdx++; run(); return; }   /* 场景内定位锚点：不占演出 */
     case 'choice': {
       waiting = 'choice';
       clearTimeout(autoTimer);
@@ -1322,10 +1349,7 @@ function run() {
           choiceNav = null;
           box.innerHTML = '';
           if (opt.set) applySet(opt.set);
-          if (opt.goto) {
-            const t = script.scenes.findIndex(s => s.id === opt.goto);
-            if (t >= 0) { stopVoice(); enterScene(t); return; }
-          }
+          if (opt.goto && jumpTo(opt.goto)) return;
           lineIdx++; waiting = null; run();
         };
         box.appendChild(b);
@@ -1410,11 +1434,7 @@ function runCheck(cmd) {
   if (outcome.set) applySet(outcome.set);   /* set 立即结算（存档一致） */
   const done = () => {
     pendingCheck = null; waiting = null;
-    if (outcome.goto) {
-      const t = script.scenes.findIndex(s => s.id === outcome.goto);
-      if (t >= 0) { stopVoice(); enterScene(t); return; }
-      console.warn('check 悬空 goto:', outcome.goto);
-    }
+    if (outcome.goto && jumpTo(outcome.goto)) return;
     lineIdx++; run();
   };
   /* 跳过/快进模式：不播演出直接结算 */
@@ -1470,7 +1490,7 @@ function advance() {
   if (skipMode && waiting && waiting !== 'advance') stopSkipAuto();
   if (skipAllMode && waiting && waiting !== 'advance') stopSkipAuto();
 }
-function enterScene(idx, _guard) {
+function enterScene(idx, _guard, _startLine) {
   if (idx >= script.scenes.length) return;
   const sc = script.scenes[idx];
   if (sc.require && !evalIf(sc.require)) {
@@ -1483,7 +1503,7 @@ function enterScene(idx, _guard) {
     enterScene(idx + 1, (_guard || 0) + 1); return;
   }
   sceneTransition();
-  sceneIdx = idx; lineIdx = 0;
+  sceneIdx = idx; lineIdx = _startLine || 0;
   $('choices').innerHTML = '';
   $('hotspots').innerHTML = '';
   if (sc.background !== undefined) setBackground(sc.background);
@@ -1616,9 +1636,28 @@ function validate(sc) {
     if (s.require_else && !ids.has(s.require_else)) warns.push(`场景 ${s.id}：require_else "${s.require_else}" 不存在`);
     (s.chars || []).forEach(c => { if (!sc.characters[c.id]) warns.push(`场景 ${s.id}：角色 "${c.id}" 未定义`); });
     (s.script || []).forEach((cmd, i) => {
-      if (cmd.type === 'goto' && cmd.target && !ids.has(cmd.target)) warns.push(`场景 ${s.id} 第${i+1}行：goto 目标 "${cmd.target}" 不存在`);
+      if (cmd.type === 'goto' && cmd.target) {
+        const pr = String(cmd.target).split(':');
+        const sid = pr.length > 1 ? (pr[0] || s.id) : pr[0];
+        if (pr.length === 1 && !ids.has(sid)) warns.push(`场景 ${s.id} 第${i+1}行：goto 目标 "${cmd.target}" 不存在`);
+        else if (pr.length > 1) {
+          const ts = sc.scenes.find(x => x.id === sid);
+          if (!ts) warns.push(`场景 ${s.id} 第${i+1}行：goto 目标场景 "${sid}" 不存在`);
+          else if (!(ts.script || []).some(c => c.type === 'mark' && c.id === pr[1]))
+            warns.push(`场景 ${s.id} 第${i+1}行：goto 锚点 "${pr[1]}" 在场景 "${sid}" 不存在`);
+        }
+      }
+      if (cmd.type === 'mark' && !cmd.id) warns.push(`场景 ${s.id} 第${i+1}行：标记缺少 id`);
       if (cmd.type === 'say' && !sc.characters[cmd.who]) warns.push(`场景 ${s.id} 第${i+1}行：说话角色 "${cmd.who}" 未定义`);
-      if (cmd.type === 'choice') cmd.options.forEach(o => { if (o.goto && !ids.has(o.goto)) warns.push(`场景 ${s.id} 第${i+1}行：选项 "${o.text}" 的 goto "${o.goto}" 不存在`); });
+      if (cmd.type === 'choice') cmd.options.forEach(o => {
+        if (!o.goto) return;
+        const pr = String(o.goto).split(':');
+        const sid = pr.length > 1 ? (pr[0] || s.id) : pr[0];
+        const ts = sc.scenes.find(x => x.id === sid);
+        if (!ts) warns.push(`场景 ${s.id} 第${i+1}行：选项 "${o.text}" 的 goto "${o.goto}" 场景不存在`);
+        else if (pr.length > 1 && !(ts.script || []).some(c => c.type === 'mark' && c.id === pr[1]))
+          warns.push(`场景 ${s.id} 第${i+1}行：选项 "${o.text}" 的锚点 "${pr[1]}" 在场景 "${sid}" 不存在`);
+      });
       if (cmd.type === 'check') {
         if (cmd.attr && sc.attrs && !sc.attrs[cmd.attr]) warns.push(`场景 ${s.id} 第${i+1}行：判定属性 "${cmd.attr}" 未在 attrs 声明`);
         ['success','fail'].forEach(k => { const o = cmd[k]; if (o && o.goto && !ids.has(o.goto)) warns.push(`场景 ${s.id} 第${i+1}行：判定${k==='success'?'成功':'失败'}分支 goto "${o.goto}" 不存在`); });
@@ -2340,10 +2379,10 @@ function renderTimeline(sc) {
   // Other track: set, goto, end, show, inspect, check
   const oBlocks = document.querySelector('#tl-other .tl-blocks'); oBlocks.innerHTML = '';
   (sc.script||[]).forEach((cmd, idx) => {
-    if (!['set','goto','end','show','inspect','check'].includes(cmd.type)) return;
+    if (!['set','goto','end','show','inspect','check','mark'].includes(cmd.type)) return;
     const b = document.createElement('div'); b.className = 'tl-block ' + cmd.type;
     b.style.left = (idx/total*100)+'%'; b.style.width = Math.max(4, (100/total))+'%';
-    b.textContent = cmd.type==='set'?'⚙'+Object.keys(cmd.vars||{}).join(','):cmd.type==='goto'?'⏭'+cmd.target:cmd.type==='end'?'🏁'+cmd.label:cmd.type==='show'?'🖼CG':cmd.type==='inspect'?'🔍':cmd.type==='check'?'🎲'+(cmd.text||cmd.attr||'判定'):'';
+    b.textContent = cmd.type==='set'?'⚙'+Object.keys(cmd.vars||{}).join(','):cmd.type==='goto'?'⏭'+cmd.target:cmd.type==='end'?'🏁'+cmd.label:cmd.type==='show'?'🖼CG':cmd.type==='inspect'?'🔍':cmd.type==='check'?'🎲'+(cmd.text||cmd.attr||'判定'):cmd.type==='mark'?'⚓'+(cmd.id||''):'';
     b.dataset.idx = idx;
     /* 逻辑轨色块同样可拖拽重排 */
     b.draggable = true;
@@ -2359,6 +2398,37 @@ function renderTimeline(sc) {
 /* 预设五位（y=1.0 底线）与三档景别 */
 const ED_POS_PRESETS = [['far-left',0.10],['left',0.28],['center',0.50],['right',0.72],['far-right',0.90]];
 const ED_SCALE_PRESETS = [['远',0.75],['中',0.85],['近',1.0]];
+/* 场景内锚点清单 */
+function sceneMarks(sid) {
+  const s = (script.scenes || []).find(x => x.id === sid);
+  return s ? (s.script || []).filter(c => c.type === 'mark').map(c => c.id) : [];
+}
+/* 跳转目标选择器：先选场景，目标场景有 ⚓锚点 时二级选落点（场景头/某锚点）；onDone('')=继续 */
+function pickJumpTarget(anchorEl, current, onDone) {
+  openAssetGrid(anchorEl, { title: '选择跳转目标场景', items: sceneGridItems(true), current: current || '',
+    onPick: v => {
+      if (!v) { onDone(''); return; }
+      const marks = sceneMarks(v);
+      if (!marks.length) { onDone(v); return; }
+      setTimeout(() => openAssetGrid(anchorEl, {
+        title: '「' + v + '」的落点',
+        items: [{ value: v, label: '从场景头开始', icon: '🎬' }].concat(marks.map(m => ({ value: v + ':' + m, label: '锚点 ' + m, icon: '⚓' }))),
+        current: '',
+        onPick: v2 => onDone(v2 || v)
+      }), 0);
+    } });
+}
+/* 锚点感知的悬空检查：null=正常 */
+function jumpErr(curSceneId, ref) {
+  if (!ref) return null;
+  const pr = String(ref).split(':');
+  const sid = pr.length > 1 ? (pr[0] || curSceneId) : pr[0];
+  const ts = (script.scenes || []).find(x => x.id === sid);
+  if (!ts) return '跳转场景 "' + sid + '" 不存在';
+  if (pr.length > 1 && !(ts.script || []).some(c => c.type === 'mark' && c.id === pr[1]))
+    return '锚点 "' + pr[1] + '" 在 "' + sid + '" 不存在';
+  return null;
+}
 
 /* 帧状态推演：每帧在场人物（场景头 chars + say 自动补位，补位规则同引擎：center→left→right 首个空槽） */
 function frameStates(sc) {
@@ -2458,7 +2528,7 @@ function renderFrameStrip(sc) {
       if (entered.length) badges.push('▲' + entered.map(id => (script.characters[id] || {}).name || id).join(','));
       if (gone.length) badges.push('▼' + gone.map(id => (script.characters[id] || {}).name || id).join(','));
     }
-    const typeBadge = { show:'🖼', choice:'🔀', set:'⚙', goto:'⏭', end:'🏁', inspect:'🔍', check:'🎲' }[cmd.type];
+    const typeBadge = { show:'🖼', choice:'🔀', set:'⚙', goto:'⏭', end:'🏁', inspect:'🔍', check:'🎲', mark:'⚓' }[cmd.type];
     if (typeBadge) badges.push(typeBadge);
     prevIds = ids;
     if (badges.length) {
@@ -2489,14 +2559,14 @@ function renderFrameStrip(sc) {
       const c = document.createElement('span');
       c.className = 'fr-chip';
       c.textContent = label;
-      if (target && !sceneIds.has(target)) {   /* 悬空引用：chip 标红 + 帧卡红框 */
-        dangling.push('跳转目标 "' + target + '" 不存在');
+      const jerr = jumpErr(sc.id, target);   /* 悬空/锚点缺失：chip 标红 + 帧卡红框 */
+      if (jerr) {
+        dangling.push(jerr);
         c.style.borderColor = '#e74c3c'; c.style.color = '#ff8a7a';
       }
       c.onclick = ev => {
         ev.stopPropagation();
-        openAssetGrid(c, { title:'选择跳转目标场景', items: sceneGridItems(true), current: target || '',
-          onPick: v => { apply(v); selectEditorScene(edSceneIdx); previewLine(sc, idx); } });
+        pickJumpTarget(c, target, v => { apply(v); selectEditorScene(edSceneIdx); previewLine(sc, idx); });
       };
       chips.appendChild(c);
     };
@@ -2645,6 +2715,25 @@ function previewLine(sc, idx) {
     textel.className = '';
     textel.contentEditable = 'false';
     buildGotoInline(cmd);
+  } else if (cmd.type === 'mark') {
+    /* 锚点标记：直接改名（全场景唯一校验） */
+    overlay.classList.add('show'); namebox.classList.remove('show');
+    textel.className = ''; textel.contentEditable = 'false';
+    textel.innerHTML = '';
+    const div = document.createElement('div');
+    div.style.cssText = 'font-size:.85em';
+    div.innerHTML = '<b>⚓ 标记</b> <span style="opacity:.5;font-size:.8em">跳转落点锚点，可写作 -> ' + sc.id + ':锚点 或 -> :锚点</span><br>';
+    const inp = document.createElement('input');
+    inp.value = cmd.id || '';
+    inp.style.cssText = 'margin-top:4px;padding:3px;background:#0c1120;color:#ffd75e;border:1px solid #5a7bb0;border-radius:3px;font-size:.9em;width:12em';
+    inp.onchange = () => {
+      const v = inp.value.trim();
+      if (!/^[A-Za-z0-9_\-]+$/.test(v)) { alert('锚点 ID 只能含字母、数字、下划线、连字符'); inp.value = cmd.id || ''; return; }
+      if (sc.script.some((c, i) => c.type === 'mark' && c.id === v && i !== idx)) { alert('本场景已存在同名锚点「' + v + '」'); inp.value = cmd.id || ''; return; }
+      cmd.id = v; edChanged(); renderTimeline(sc);
+    };
+    div.appendChild(inp);
+    textel.appendChild(div);
   } else {
     overlay.classList.remove('show');
   }
@@ -2697,8 +2786,9 @@ function buildChoiceInline(cmd) {
     gotoChip.title = '点击选择目标场景（缩略图网格）';
     gotoChip.onclick = function(ev) {
       ev.stopPropagation();
-      openAssetGrid(gotoChip, { title:'选择跳转目标场景', items: sceneGridItems(true), current:o.goto||'',
-        onPick: function(v) { o.goto = v || undefined; previewLine(script.scenes[edSceneIdx], edPreviewLine); renderTimeline(script.scenes[edSceneIdx]); } });
+      pickJumpTarget(gotoChip, o.goto || '', function(v) {
+        o.goto = v || undefined; previewLine(script.scenes[edSceneIdx], edPreviewLine); renderTimeline(script.scenes[edSceneIdx]);
+      });
     };
     /* {变量} chip：弹属性行小面板（+/-/=） */
     var setChip = document.createElement('span');
@@ -2923,8 +3013,9 @@ function buildGotoInline(cmd) {
     chip.textContent = b.target ? '→ ' + b.target : '→ 点选目标场景';
     chip.onclick = function(ev) {
       ev.stopPropagation();
-      openAssetGrid(chip, { title:'选择跳转目标场景', items: sceneGridItems(false), current: sel.value,
-        onPick: function(v) { sel.value = v; saveGotoInline(); previewLine(script.scenes[edSceneIdx], edPreviewLine); renderTimeline(script.scenes[edSceneIdx]); } });
+      pickJumpTarget(chip, sel.value, function(v) {
+        sel.value = v; saveGotoInline(); previewLine(script.scenes[edSceneIdx], edPreviewLine); renderTimeline(script.scenes[edSceneIdx]);
+      });
     };
     row.appendChild(lbl); row.appendChild(inpIf); row.appendChild(arr); row.appendChild(chip); row.appendChild(sel);
     if (brs.length > 1) {
@@ -3039,6 +3130,7 @@ function renderEditorScript(sc) {
       case 'set': summary = '⚙ '+Object.keys(cmd.vars||{}).map(k=>k+'='+(cmd.vars[k])).join(', '); break;
       case 'check': summary = '🎲 判定: '+(cmd.text||cmd.attr||'')+(cmd.mode==='roll'?'（掷骰 vs '+cmd.value+'）':' '+(cmd.op||'>=')+' '+cmd.value); break;
       case 'goto': summary = '⏭ 跳转到 → <b>'+cmd.target+'</b>'; break;
+      case 'mark': summary = '⚓ 标记 <b>'+(cmd.id||'')+'</b>（跳转定位锚点）'; break;
       case 'end': summary = '🏁 结局: '+cmd.label; break;
       case 'show': summary = '🖼 CG展示: '+cmd.image; break;
       case 'inspect': summary = '🔍 调查: '+((cmd.show||{}).text||'').slice(0,40); break;
@@ -3690,7 +3782,7 @@ function renderInsertGaps(sc) {
 function openCmdPalette(anchorEl, insertAt) {
   const types = [
     ['💬','对白','say'], ['📖','旁白','narrate'], ['🔀','选项','choice'], ['⚙','变量','set'],
-    ['🎲','判定','check'], ['⏭','跳转','goto'], ['🏁','结局','end'], ['🖼','CG','show'], ['🔍','调查','inspect']
+    ['🎲','判定','check'], ['⏭','跳转','goto'], ['⚓','标记','mark'], ['🏁','结局','end'], ['🖼','CG','show'], ['🔍','调查','inspect']
   ];
   openAssetGrid(anchorEl, {
     title: '在第 ' + insertAt + ' 条后插入指令',
@@ -3704,6 +3796,7 @@ function openCmdPalette(anchorEl, insertAt) {
         choice:{type:'choice',options:[{text:'选项1'}]}, set:{type:'set',vars:{}},
         check:{type:'check',attr:Object.keys(script.attrs||{})[0]||'favor',op:'>=',value:10,mode:'judge',text:''},
         goto:{type:'goto',target:''}, end:{type:'end',label:'新结局'}, show:{type:'show',image:''},
+        mark:{type:'mark', id:'m' + ((sc.script||[]).filter(c => c.type === 'mark').length + 1)},
         inspect:{type:'inspect',x:0.5,y:0.5,w:0.1,h:0.1,show:{text:''}}
       };
       const cmd = JSON.parse(JSON.stringify(defaults[type] || { type }));
@@ -4315,7 +4408,20 @@ function bindUI() {
         try {
           const res = window.TextScript.compile(String(r.result));
           (res.warnings || []).forEach(w => console.warn('[文字脚本告警]', w));
-          loadScript(res.script);
+          /* 多幕累计更新：当前已有剧本时可选追加合并（场景 id 冲突则中止并列出） */
+          if (script && script.scenes && script.scenes.length &&
+              confirm('当前已有剧本《' + (script.meta.title || '?') + '》。\n确定=追加合并新场景（多幕累计），取消=覆盖重开')) {
+            const baseIds = new Set(script.scenes.map(s => s.id));
+            const dup = res.script.scenes.filter(s => baseIds.has(s.id)).map(s => s.id);
+            if (dup.length) { alert('追加失败：场景 id 冲突 ' + dup.join(', ') + '\n换个场景 id 前缀即可。'); return; }
+            Object.assign(script.characters, res.script.characters || {});
+            script.attrs = Object.assign(script.attrs || {}, res.script.attrs || {});
+            script.scenes = script.scenes.concat(res.script.scenes);
+            alert('已追加 ' + res.script.scenes.length + ' 个场景，现共 ' + script.scenes.length + ' 个。');
+            loadScript(script);
+          } else {
+            loadScript(res.script);
+          }
         } catch (e) { alert('文字脚本编译失败：\n' + e.message); }
       } else {
         try { loadScript(JSON.parse(r.result)); } catch (e) { alert('JSON 解析失败：' + e.message); }

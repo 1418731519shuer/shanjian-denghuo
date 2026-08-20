@@ -911,8 +911,10 @@
       <details id="an-example-details">
         <summary>📜 查看脚本示例</summary>
         <div class="an-hint" style="margin:.4em 0">这就是生成结果的格式（文字脚本，与剧本 JSON 一一对应）。
-          生成完成后可下载 JSON，并用文字脚本格式继续改剧情。</div>
-        <pre id="an-example-text"></pre>
+          生成完成后可下载 JSON，并用文字脚本格式继续改剧情。
+          <button class="an-btn small" id="an-copy-example" style="margin-left:.5em">📋 复制示例</button>
+          <span id="an-copy-tip" style="color:#7fd07f;font-size:.8em"></span></div>
+        <pre id="an-example-text" style="user-select:text"></pre>
       </details>
     </div>
     <div class="an-row">
@@ -970,6 +972,22 @@
     initTemplates();
     // 「查看脚本示例」面板：优先 tsc.js 内置 DEMO，没有则用内置精简版
     $('an-example-text').textContent = textScriptExample();
+    /* 示例可复制：写剪贴板，降级 execCommand */
+    $('an-copy-example').onclick = () => {
+      const txt = $('an-example-text').textContent;
+      const tip = $('an-copy-tip');
+      const ok = () => { tip.textContent = '已复制 ✓'; setTimeout(() => tip.textContent = '', 1500); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(ok).catch(() => { fallbackCopy(txt); ok(); });
+      } else { fallbackCopy(txt); ok(); }
+    };
+    function fallbackCopy(txt) {
+      const ta = document.createElement('textarea');
+      ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch (e) {}
+      ta.remove();
+    }
   }
 
   /* ================= 快速模板 chips ================= */

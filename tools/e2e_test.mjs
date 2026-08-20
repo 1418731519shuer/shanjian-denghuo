@@ -528,6 +528,8 @@ async function main() {
     const miniPath = path.join(os.tmpdir(), 'wenyou-e2e-mini.txt');
     fs.writeFileSync(miniPath, miniTxt, 'utf8');
     dialogs.length = 0;
+    await ev(`window.confirm = () => false`);   /* 已有剧本时的追加询问：选「覆盖」 */
+    setTimeout(() => {}, 0);
     const doc = await cdp.send('DOM.getDocument', { depth: 1 });
     const q = await cdp.send('DOM.querySelector', { nodeId: doc.root.nodeId, selector: '#script-file' });
     await cdp.send('DOM.setFileInputFiles', { files: [miniPath], nodeId: q.nodeId });
@@ -543,7 +545,8 @@ async function main() {
     const label = await ev(`document.getElementById('end-label').textContent`);
     if (!label.includes('迷你结局')) throw new Error('结局名不符: ' + label);
     await ev(`backToTitle()`);
-    return `载入→开玩→${label}`;
+        await ev(`delete window.confirm`);
+return `载入→开玩→${label}`;
   });
 
   /* ---------- 用例 16：选项键盘导航（高亮/方向键/数字键） ---------- */
@@ -616,6 +619,96 @@ async function main() {
     await ev(`(() => { const s = document.getElementById('set-speed'); s.value = '25'; s.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await click('#settings-panel [data-close]');
     return `瞬间档全显，慢速档 ${early}→${later} 逐字推进`;
+  });
+
+  /* ---------- 用例 19：锚点跳转（同场景 :锚点 / 跨场景 场景:锚点） ---------- */
+  await runCase('19. 锚点跳转：同场景跳读 + 跨场景定点落位', async () => {
+    /* 页面内构造带 mark 的迷你剧本并载入 */
+    await ev(`loadScript({
+      meta: { title: '锚点验证剧', version: '1' },
+      characters: { c1: { name: '甲', color: '#fff', sprites: { normal: 'chars/su_normal.webp' } } },
+      assets_dir: 'assets/',
+      scenes: [
+        { id: 'a1', background: 'bg/teashelter.webp', chars: [{ id: 'c1', pos: 'center' }],
+          script: [
+            { type: 'narrate', text: '甲一' },
+            { type: 'goto', target: ':later' },
+            { type: 'narrate', text: '不该看到这句' },
+            { type: 'mark', id: 'later' },
+            { type: 'narrate', text: '锚点后' },
+            { type: 'goto', target: 'a2:pt' },
+            { type: 'narrate', text: '也不该看到' } ] },
+        { id: 'a2', background: 'bg/town_day.webp', chars: [],
+          script: [
+            { type: 'narrate', text: '二场景头（应被跳过）' },
+            { type: 'mark', id: 'pt' },
+            { type: 'say', who: 'c1', text: '落点到了' },
+            { type: 'end', label: '锚点结局' } ] } ]
+    })`);
+    await ev(`void startNewGame()`);   /* 不许 await：名字弹窗 promise 会挂住 */
+    await sleep(300);
+    if (await visible('#name-input-overlay')) { await ev(`document.getElementById('name-input-field').value='锚'`); await click('#name-input-confirm'); }
+    const seq = [];
+    for (let i = 0; i < 12; i++) {
+      const t = await step();
+      const txt = await ev(`document.getElementById('dlgtext').textContent`);
+      if (t === 'dlg') seq.push(txt.slice(0, 8));
+      if (t === 'end') break;
+      await sleep(80);
+    }
+    const joined = seq.join('|');
+    if (/不该看到|应被跳过/.test(joined)) throw new Error('锚点跳转漏跳: ' + joined);
+    if (!/甲一/.test(joined) || !/锚点后/.test(joined) || !/落点到了/.test(joined)) throw new Error('锚点路径不对: ' + joined);
+    /* 选项同场景锚点：补测 choice -> :锚点 */
+    await ev(`loadScript({
+      meta: { title: '锚点验证剧2', version: '1' },
+      characters: { c1: { name: '甲', color: '#fff', sprites: { normal: 'chars/su_normal.webp' } } },
+      assets_dir: 'assets/',
+      scenes: [{ id: 'b1', background: 'none', chars: [],
+        script: [
+          { type: 'choice', options: [{ text: '跳到尾部', goto: ':tail' }] },
+          { type: 'narrate', text: '中间句不该看到' },
+          { type: 'mark', id: 'tail' },
+          { type: 'end', label: '尾部结局' } ] }] })`);
+    await ev(`void startNewGame()`);   /* 不许 await：名字弹窗 promise 会挂住 */
+    await sleep(300);
+    if (await visible('#name-input-overlay')) { await ev(`document.getElementById('name-input-field').value='锚2'`); await click('#name-input-confirm'); }
+    await sleep(300);
+    await click('#choices .choice-btn');
+    await sleep(400);
+    const endTxt = await ev(`document.getElementById('end-screen').classList.contains('hidden') ? document.getElementById('dlgtext').textContent : 'ENDED'`);
+    if (endTxt.includes('中间句')) throw new Error('选项同场景锚点未跳');
+    return '同场景/跨场景/选项锚点 三路径全对';
+  });
+
+  /* ---------- 用例 20：文字脚本追加合并（多幕累计） ---------- */
+  await runCase('20. 载入 .txt 时追加合并新幕（冲突检测）', async () => {
+    /* 先有剧本《锚点验证剧2》（2 场景内 1 个 b1），再喂一个 .txt 新幕 */
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const pathM = await import('node:path');
+    const tmp = pathM.join(os.tmpdir(), 'wenyou_act2.txt');
+    fs.writeFileSync(tmp, '# 标题 第二幕\n==场景 b2 背景=none\n旁白 追加的第二幕。\n::结局 追加结局\n', 'utf-8');
+    await ev(`window.confirm = () => true`);   /* 追加询问：选「追加合并」 */
+    const before = await ev(`script.scenes.length`);
+    /* confirm 自动接受（javascriptDialogOpening handler 已挂） → 走追加合并 */
+    await cdp.send('DOM.setFileInputFiles', { files: [tmp], node: await (async () => {
+      const doc = await cdp.send('DOM.getDocument'); const q = await cdp.send('DOM.querySelector', { nodeId: doc.root.nodeId, selector: '#script-file' }); return q;
+    })().then(q => q.nodeId) }).catch(async () => {
+      /* 部分版本需 backendNodeId */
+      const doc = await cdp.send('DOM.getDocument');
+      const q = await cdp.send('DOM.querySelector', { nodeId: doc.root.nodeId, selector: '#script-file' });
+      const n = await cdp.send('DOM.describeNode', { nodeId: q.nodeId });
+      await cdp.send('DOM.setFileInputFiles', { files: [tmp], backendNodeId: n.node.backendNodeId });
+    });
+    await sleep(600);
+    const after = await ev(`script.scenes.map(s => s.id).join(',')`);
+    if (!/b2/.test(after)) throw new Error('追加后无 b2: ' + after);
+    const title = await ev(`script.meta.title`);
+    if (title !== '锚点验证剧2') throw new Error('追加不应改标题: ' + title);
+    fs.unlinkSync(tmp);
+    await ev(`delete window.confirm`);   /* 恢复默认（undefined → 走自动接受） */
+    return `场景 ${before} → 追加后 [${after}]，标题保持`;
   });
 
   /* ================= 汇总 ================= */

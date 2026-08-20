@@ -401,6 +401,12 @@ Compiler.prototype.parseBody = function (n, line) {
     this.parseCheck(n, line.slice(3).trim());
   } else if (line.indexOf('->') === 0) {
     this.parseGoto(n, line.slice(2).trim());
+  } else if (line.indexOf('::标签') === 0) {
+    var mid = line.slice(4).trim();
+    if (!mid || !/^[A-Za-z0-9_\-]+$/.test(mid)) throw new CompileError(n, '::标签 缺少合法锚点 id（字母/数字/下划线/连字符）');
+    if (this.cur.script.some(function (c) { return c.type === 'mark' && c.id === mid; }))
+      throw new CompileError(n, '本场景已存在同名锚点 "' + mid + '"');
+    this.cur.script.push({ type: 'mark', id: mid, _line: n });
   } else if (line.indexOf('::结局') === 0) {
     var label = line.slice(4).trim();
     if (!label) throw new CompileError(n, '::结局 缺少结局名');
@@ -707,24 +713,35 @@ Compiler.prototype.validate = function () {
     else self.err(a.line, '属性 "' + aid + '" 的归属 "@' + raw + '" 不是已定义的角色 id（主控写法：@主控 / @player / @我）');
   });
 
-  /* 1) 场景引用 */
+  /* 1) 场景引用（支持锚点形式：场景id:锚点 / :锚点=同场景内） */
+  var marks = Object.create(null);
+  this.scenes.forEach(function (sc) {
+    marks[sc.id] = Object.create(null);
+    sc.script.forEach(function (c) { if (c.type === 'mark') marks[sc.id][c.id] = true; });
+  });
+  function checkRef(self2, ref, lineno, what, curSid) {
+    if (!ref) return;
+    var parts = String(ref).split(':');
+    var sid = parts.length > 1 ? (parts[0] || curSid) : parts[0];
+    var anchor = parts.length > 1 ? parts[1] : null;
+    if (!(sid in ids)) { self2.err(lineno, what + ' 指向未定义的场景 "' + sid + '"'); return; }
+    if (anchor && !(marks[sid] && marks[sid][anchor]))
+      self2.err(lineno, what + ' 指向场景 "' + sid + '" 中不存在的锚点 "' + anchor + '"');
+  }
   this.scenes.forEach(function (sc) {
     var ref = sc.require_else;
     if (ref && !(ref in ids))
       self.err(sc._require_else_line, '条件跳转 指向未定义的场景 "' + ref + '"');
     sc.script.forEach(function (cmd) {
-      if (cmd.type === 'goto' && !(cmd.target in ids))
-        self.err(cmd._line, '-> 跳转指向未定义的场景 "' + cmd.target + '"');
+      if (cmd.type === 'goto' && cmd.target) checkRef(self, cmd.target, cmd._line, '-> 跳转', sc.id);
       if (cmd.type === 'choice')
         cmd.options.forEach(function (o) {
-          if ('goto' in o && !(o.goto in ids))
-            self.err(o._line, '选项 -> 指向未定义的场景 "' + o.goto + '"');
+          if (o.goto) checkRef(self, o.goto, o._line, '选项 ->', sc.id);
         });
       if (cmd.type === 'check')
         [['success', '成功'], ['fail', '失败']].forEach(function (bk) {
           var br = cmd[bk[0]] || {};
-          if (br.goto && !(br.goto in ids))
-            self.err(cmd._line, '!判定 ' + bk[1] + ' 指向未定义的场景 "' + br.goto + '"');
+          if (br.goto) checkRef(self, br.goto, cmd._line, '!判定 ' + bk[1], sc.id);
         });
     });
   });
@@ -760,15 +777,16 @@ Compiler.prototype.validate = function () {
     var adj = Object.create(null);
     this.scenes.forEach(function (sc) { adj[sc.id] = []; });
     this.scenes.forEach(function (sc, i) {
-      function link(t) { if (t in ids && adj[sc.id].indexOf(t) < 0) adj[sc.id].push(t); }
+      function sceneOf(ref) { return (ref || '').split(':')[0] || null; }   /* 剥掉 :锚点 */
+      function link(t) { if (t && t in ids && adj[sc.id].indexOf(t) < 0) adj[sc.id].push(t); }
       if (sc.require_else) link(sc.require_else);
       else if (sc.require && i + 1 < self.scenes.length) link(self.scenes[i + 1].id);
       sc.script.forEach(function (cmd) {
-        if (cmd.type === 'goto') link(cmd.target);
-        else if (cmd.type === 'choice') cmd.options.forEach(function (o) { if ('goto' in o) link(o.goto); });
+        if (cmd.type === 'goto') link(sceneOf(cmd.target));
+        else if (cmd.type === 'choice') cmd.options.forEach(function (o) { link(sceneOf(o.goto)); });
         else if (cmd.type === 'check') {
-          if (cmd.success && cmd.success.goto) link(cmd.success.goto);
-          if (cmd.fail && cmd.fail.goto) link(cmd.fail.goto);
+          if (cmd.success && cmd.success.goto) link(sceneOf(cmd.success.goto));
+          if (cmd.fail && cmd.fail.goto) link(sceneOf(cmd.fail.goto));
         }
       });
     });
