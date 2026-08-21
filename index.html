@@ -1322,7 +1322,13 @@ function resolveJump(ref) {
   return { si, li };
 }
 /* 统一跳转执行：跨场景走 enterScene（带演出），同场景直接改行号 */
+let jumpStreak = 0;   /* 连续跳转计数：用户每次推进/选择时清零 */
 function jumpTo(ref) {
+  if (++jumpStreak > 30) {
+    console.warn('检测到跳转死循环，已熔断（检查剧本 goto/锚点是否成环）:', ref);
+    jumpStreak = 0;
+    return false;
+  }
   const r = resolveJump(ref);
   if (!r) return false;
   if (r.dangling) { console.warn('悬空跳转:', r.dangling); return false; }
@@ -1391,6 +1397,7 @@ function run() {
         if (opt.if !== undefined && !evalIf(opt.if)) { b.classList.add('disabled'); }
         else b.onclick = ev => {
           ev.stopPropagation();
+          jumpStreak = 0;
           choiceNav = null;
           box.innerHTML = '';
           if (opt.set) applySet(opt.set);
@@ -1551,6 +1558,7 @@ function finishCheck() {
 }
 
 function advance() {
+  jumpStreak = 0;
   if (waiting !== 'advance') return;
   if (typing) { completeText(); return; }
   clearTimeout(autoTimer);

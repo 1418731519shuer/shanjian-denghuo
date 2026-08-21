@@ -838,8 +838,7 @@
               "set": {
                 "favor_c4": "favor_c4-2"
               },
-              "if": "favor_c4>=1",
-              "goto": "route_c4_1"
+              "if": "favor_c4>=1"
             },
             {
               "text": "好，我答应你。",
@@ -912,8 +911,7 @@
               "set": {
                 "favor_c4": "favor_c4+5"
               },
-              "if": "favor_c4>=20",
-              "goto": "end_c4"
+              "if": "favor_c4>=20"
             }
           ]
         },
@@ -1101,16 +1099,14 @@
               "text": "质问：你为何当年要把凶手引去后山，害清砚？",
               "set": {
                 "favor_c5": "favor_c5+3"
-              },
-              "goto": "route_c5_1"
+              }
             },
             {
               "text": "（查验过她 tone 无半分作伪）你当年是被人胁迫了？",
               "if": "favor_c5>=10",
               "set": {
                 "favor_c5": "favor_c5+5"
-              },
-              "goto": "route_c5_1"
+              }
             }
           ]
         },
@@ -1189,16 +1185,14 @@
               "if": "favor_c5>=15",
               "set": {
                 "favor_c5": "favor_c5+5"
-              },
-              "goto": "end_c5"
+              }
             },
             {
               "text": "以后我们在霜寒峰顶种满桃树，再也不用冷了。",
               "if": "favor_c5>=20",
               "set": {
                 "favor_c5": "favor_c5+5"
-              },
-              "goto": "end_c5"
+              }
             }
           ]
         },
@@ -1577,7 +1571,6 @@
           "options": [
             {
               "text": "与她联手覆灭魔宗余党，携手同归",
-              "goto": "end_c3",
               "set": {
                 "favor_c3": "favor_c3+5"
               },
@@ -1585,7 +1578,6 @@
             },
             {
               "text": "看着她迎向魔宗宗主的致命一掌",
-              "goto": "end_c3",
               "set": {
                 "favor_c3": "favor_c3+10"
               },
@@ -1740,7 +1732,6 @@
           "options": [
             {
               "text": "握住她的手催动灵力：以后不用躲了，我陪你护着巫族，也护着你。",
-              "goto": "end_c7",
               "set": {
                 "favor_c7": "favor_c7+10"
               },
@@ -1748,7 +1739,6 @@
             },
             {
               "text": "刚想开口问个清楚，禁地入口突然传来天机阁弟子的呵斥声。",
-              "goto": "end_c7",
               "set": {
                 "favor_c7": "favor_c7-10"
               },
@@ -1874,14 +1864,12 @@
           "options": [
             {
               "text": "伸手擦掉她的眼泪，告诉她不管她是人是巫，都是你最重要的人",
-              "goto": "end_c2",
               "set": {
                 "favor_c2": "favor_c2+10"
               }
             },
             {
               "text": "沉默片刻，问她巫族复出会不会让九域再起战乱",
-              "goto": "end_c2",
               "set": {
                 "favor_c2": "favor_c2-2"
               },

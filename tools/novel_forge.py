@@ -368,6 +368,23 @@ def repair_links(script, cards, report):
                     cmd["label"] = new
                     report.append(f"{s['id']}: 结局名清理 -> {new}")
 
+    # --- 2.8) 自引用回环解除：选项/goto 跳回自己所在场景 = 死循环，改为顺序继续 ---
+    for s in script["scenes"]:
+        for cmd in s.get("script") or []:
+            refs = []
+            if cmd.get("type") == "goto":
+                refs.append(cmd)
+            if cmd.get("type") == "choice":
+                refs.extend(cmd.get("options") or [])
+            for r in refs:
+                g = r.get("target") or r.get("goto")
+                if g and g.split(":")[0] == s["id"]:
+                    if "target" in r:
+                        del r["target"]
+                    else:
+                        del r["goto"]
+                    report.append(f"{s['id']}: 解除自引用回环（{cmd['type']}）")
+
     # --- 3) 路线调度场景 ---
     route_flags = [f"route_{c['id']}" for c in cards]
     first_route = {f: f"route_{c['id']}_1" for f, c in zip(route_flags, cards)}
