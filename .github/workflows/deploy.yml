@@ -42,7 +42,8 @@ jobs:
 
       - name: 全结局试玩机器人
         run: |
-          export E2E_BROWSER=$(echo ~/.cache/ms-playwright/chromium-*/chrome-linux/chrome)
+          export E2E_BROWSER=$(find ~/.cache/ms-playwright \( -name chrome -o -name headless_shell \) -type f | head -1)
+          echo "browser=$E2E_BROWSER"
           node tools/e2e_routes.mjs
 
   build-deploy:
