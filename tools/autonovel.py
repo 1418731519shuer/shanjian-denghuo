@@ -356,6 +356,12 @@ def resolve_provider(args):
     if not p['url'] or not p['model']:
         sys.exit('[错误] --provider custom 需要同时提供 --base-url 和 --model')
     key = args.key or (os.environ.get(p['env']) if p['env'] else None)
+    if not key:
+        # 本机 key 库（一键生成剧本.bat 引导保存于此）：.keys/<provider>.txt
+        local_key = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                 '.keys', args.provider + '.txt')
+        if os.path.exists(local_key):
+            key = open(local_key, encoding='utf-8').read().strip()
     if not key and os.path.exists(STEP_KEY_FILE):
         key = open(STEP_KEY_FILE, encoding='utf-8').read().strip()
     if not key:

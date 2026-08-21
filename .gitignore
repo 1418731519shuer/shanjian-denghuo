@@ -4,3 +4,4 @@ __pycache__/
 dist_text/
 games_output/
 index_text_demo.html
+.keys/
