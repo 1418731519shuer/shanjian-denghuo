@@ -711,6 +711,59 @@ return `载入→开玩→${label}`;
     return `场景 ${before} → 追加后 [${after}]，标题保持`;
   });
 
+  /* ---------- 用例 21：完整通关到结局（断链修复验证） ---------- */
+  await runCase('21. 完整通关：从开局走到结局并记入结局收集', async () => {
+    /* 前序用例载入了自定义剧本，先恢复主剧本再通关 */
+    await ev(`loadScript(EMBEDDED_SCRIPT)`);
+    await sleep(300);
+    await click('#mb-title'); await waitFor(() => visible('#title-screen'), 5000, '回标题');
+    await click('#btn-start');
+    await waitFor(() => visible('#name-input-overlay'), 5000, '命名弹窗');
+    await ev(`document.getElementById('name-input-field').value = '通关者'`);
+    await click('#name-input-confirm');
+    await waitFor(async () => (await ev(`document.getElementById('dlgtext').textContent.length`)) > 0, 8000, '首条对话');
+    const seenScenes = new Set();
+    let ended = '', steps = 0;
+    for (let i = 0; i < 300; i++) {
+      steps = i;
+      const cur = await ev(`script.scenes[sceneIdx].id`);
+      seenScenes.add(cur);
+      const st = await ev(`(() => {
+        if (!document.getElementById('end-screen').classList.contains('hidden'))
+          return { t: 'end', label: document.getElementById('end-label') ? document.getElementById('end-label').textContent : '' };
+        if (document.getElementById('inspect-skip')) return { t: 'inspect' };
+        if (document.querySelector('#choices .choice-btn')) return { t: 'choice' };
+        if (!document.getElementById('viewlayer').classList.contains('hidden')) return { t: 'view' };
+        if (!document.getElementById('cglayer').classList.contains('hidden')) return { t: 'cg' };
+        if (!document.getElementById('check-layer').classList.contains('hidden')) return { t: 'check' };
+        return { t: 'dlg' };
+      })()`);
+      if (st.t === 'end') { ended = st.label; break; }
+      if (st.t === 'inspect') { await click('#inspect-skip'); await sleep(100); continue; }
+      if (st.t === 'view') { await click('#viewlayer'); await sleep(100); continue; }
+      if (st.t === 'cg') { await click('#cglayer'); await sleep(100); continue; }
+      if (st.t === 'check') { await click('#dlg'); await sleep(100); continue; }
+      if (st.t === 'choice') {
+        /* 优先走苏璃线：有约苏璃选项且灰着就先补好感再重渲 */
+        const hasLockedSu = await ev(`!![...document.querySelectorAll('#choices .choice-btn.disabled')].find(b => b.textContent.includes('约苏璃'))`);
+        if (hasLockedSu) { await ev(`vars.favor_su = 25; run()`); await sleep(200); }
+        const picked = await ev(`(() => {
+          const bs = [...document.querySelectorAll('#choices .choice-btn:not(.disabled)')];
+          const su = bs.find(b => b.textContent.includes('约苏璃'));
+          (su || bs[0]).click();
+          return (su || bs[0]).textContent.slice(0, 10);
+        })()`);
+      } else {
+        await click('#dlg');
+      }
+      await sleep(70);
+    }
+    if (!ended) throw new Error(`300 步未到结局（路径: ${[...seenScenes].join('→')}）`);
+    const ends = await ev(`JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.endsWith('_endings'))))`);
+    if (!ends || !ends.length) throw new Error('结局未写入 localStorage');
+    return `路径 ${[...seenScenes].join('→')}，结局「${ended}」，收集=${JSON.stringify(ends)}`;
+  });
+
   /* ================= 汇总 ================= */
   console.log('\n================ E2E 结果 ================');
   let pass = 0;
