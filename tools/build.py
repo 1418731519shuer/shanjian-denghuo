@@ -86,6 +86,9 @@ def main():
     make_icons()
     make_sw()
 
+    # 游戏变体（games/ 下每个目录 = 一部独立游戏，PWA 化打包到 dist/games/）
+    pack_games()
+
     total = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(DIST) for f in fs)
     print('dist total: %.1fMB' % (total / 1e6))
 
@@ -147,6 +150,63 @@ def make_sw():
             files.append('./' + rel)
     sw = SW_TEMPLATE.format(version=int(time.time()), files=json.dumps(files, indent=2))
     open(os.path.join(DIST, 'sw.js'), 'w', encoding='utf-8').write(sw)
+
+def pack_games():
+    """把 games/<slug>/（index.html + assets webp）打包为独立 PWA 子应用。"""
+    import json as _json, time as _time
+    src_root = os.path.join(ROOT, 'games')
+    if not os.path.isdir(src_root):
+        return
+    for slug in sorted(os.listdir(src_root)):
+        gdir = os.path.join(src_root, slug)
+        if not (os.path.isdir(gdir) and os.path.exists(os.path.join(gdir, 'index.html'))):
+            continue
+        dst = os.path.join(DIST, 'games', slug)
+        if os.path.exists(dst):
+            shutil.rmtree(dst)
+        os.makedirs(dst)
+        shutil.copy(os.path.join(gdir, 'index.html'), dst)
+        # 素材原样拷贝（已是 webp）
+        for dp, _, fs in os.walk(os.path.join(gdir, 'assets')):
+            for f in fs:
+                if '.raw.' in f:
+                    continue
+                s = os.path.join(dp, f)
+                d = os.path.join(dst, os.path.relpath(s, gdir))
+                os.makedirs(os.path.dirname(d), exist_ok=True)
+                shutil.copy2(s, d)
+        # 标题取 script.json meta
+        title = slug
+        sj = os.path.join(gdir, 'script.json')
+        if os.path.exists(sj):
+            try:
+                title = _json.load(open(sj, encoding='utf-8'))['meta']['title']
+            except Exception:
+                pass
+        # manifest + 图标（复用主应用图标）+ SW
+        _json.dump({
+            "name": title, "short_name": title[:8],
+            "start_url": "./index.html", "scope": "./", "display": "standalone",
+            "background_color": "#000000", "theme_color": "#1a2233",
+            "icons": [
+                {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+                {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png"}],
+        }, open(os.path.join(dst, 'manifest.webmanifest'), 'w', encoding='utf-8'),
+            ensure_ascii=False, indent=2)
+        os.makedirs(os.path.join(dst, 'icons'), exist_ok=True)
+        for ic in ('icon-192.png', 'icon-512.png'):
+            shutil.copy(os.path.join(DIST, 'icons', ic), os.path.join(dst, 'icons', ic))
+        files = ['./', './index.html', './manifest.webmanifest',
+                 './icons/icon-192.png', './icons/icon-512.png']
+        for dp, _, fs in os.walk(os.path.join(dst, 'assets')):
+            for f in sorted(fs):
+                rel = os.path.relpath(os.path.join(dp, f), dst).replace(os.sep, '/')
+                files.append('./' + rel)
+        sw = SW_TEMPLATE.replace("wenyou-", "wenyou-g-").format(
+            version=int(_time.time()), files=_json.dumps(files, indent=2))
+        open(os.path.join(dst, 'sw.js'), 'w', encoding='utf-8').write(sw)
+        print('game packed: games/%s (%s)' % (slug, title))
+
 
 if __name__ == '__main__':
     main()
