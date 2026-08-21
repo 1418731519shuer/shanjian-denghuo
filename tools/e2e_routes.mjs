@@ -128,7 +128,7 @@ async function main() {
   await waitFor(async () => (await fetch(`http://127.0.0.1:${HTTP_PORT}/index.html`)).ok, 10000, 'server');
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'routes-'));
   const browser = spawn(BROWSER, ['--headless=new', `--remote-debugging-port=${CDP_PORT}`, `--user-data-dir=${profile}`,
-    '--no-first-run', '--no-default-browser-check', '--disable-gpu', '--mute-audio', 'about:blank'], { stdio: 'ignore' });
+    '--no-first-run', '--no-default-browser-check', '--disable-gpu', '--mute-audio', '--no-sandbox', '--disable-dev-shm-usage', 'about:blank'], { stdio: 'ignore' });
   children.push(browser);
   await waitFor(async () => (await fetch(`http://127.0.0.1:${CDP_PORT}/json/version`)).ok, 15000, '浏览器 CDP');
   const page = (await (await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`)).json()).find(t => t.type === 'page');
