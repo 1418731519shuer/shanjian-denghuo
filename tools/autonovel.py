@@ -56,7 +56,7 @@ AUDIO_EXTS = ('.mp3', '.wav', '.ogg', '.m4a')
 PROVIDERS = {
     'glm':      {'url': 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
                  'model': 'glm-4-flash', 'env': 'ZHIPU_API_KEY', 'max_tokens': 4095},
-    'step':     {'url': 'https://api.stepfun.com/v1/chat/completions',
+    'step':     {'url': 'https://api.stepfun.com/step_plan/v1/chat/completions',
                  'model': 'step-3.7-flash', 'env': 'STEP_API_KEY'},
     'deepseek': {'url': 'https://api.deepseek.com/v1/chat/completions',
                  'model': 'deepseek-chat', 'env': 'DEEPSEEK_API_KEY'},

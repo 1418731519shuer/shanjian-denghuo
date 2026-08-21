@@ -25,7 +25,7 @@
   // site 为 key 获取平台，maxTokens 缺省用 MAX_TOKENS（glm-4-flash 输出上限 4095）
   const PROVIDERS = {
     glm:      { name: '智谱GLM（推荐，glm-4-flash 免费）', url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions', model: 'glm-4-flash', site: 'bigmodel.cn', maxTokens: 4095 },
-    step:     { name: '阶跃星辰', url: 'https://api.stepfun.com/v1/chat/completions', model: 'step-3.7-flash', site: 'platform.stepfun.com' },
+    step:     { name: '阶跃星辰', url: 'https://api.stepfun.com/step_plan/v1/chat/completions', model: 'step-3.7-flash', site: 'platform.stepfun.com' },
     deepseek: { name: 'DeepSeek（有免费额度活动）', url: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-chat', site: 'platform.deepseek.com' },
     moonshot: { name: '月之暗面 Kimi', url: 'https://api.moonshot.cn/v1/chat/completions', model: 'moonshot-v1-8k', site: 'platform.moonshot.cn' },
     custom:   { name: '自定义（OpenAI 兼容接口）', url: '', model: '', site: '' },

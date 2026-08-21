@@ -1880,22 +1880,36 @@ function renderBranchGraph() {
   const endScenes = new Set();
   scenes.forEach(s => (s.script || []).forEach(c => { if (c.type === 'end') endScenes.add(s.id); }));
 
-  /* 分层布局：从首个场景 BFS 深度为列，层内纵排；不可达场景排在最后一列并标灰 */
-  const depth = {}; depth[scenes[0].id] = 0;
+  /* 分层布局：按关系自然分层（无入边=第0层，其余=源最深+1，带步数上限防环发散）。
+     不可达标记单独按「入口 BFS」计算——布局表达关系，标记表达可达性，互不干扰 */
   const adj = {};
   edges.forEach(e => { if (ids.has(e.to)) (adj[e.from] = adj[e.from] || []).push(e.to); });
   /* require 校验失败时会自动落入下一场景（引擎 enterScene 行为），这也是通路 */
   scenes.forEach((s, i) => { if (s.require && i + 1 < scenes.length) (adj[s.id] = adj[s.id] || []).push(scenes[i + 1].id); });
+  /* 入口可达性（仅用于「不可达」角标） */
+  const seen = new Set([scenes[0].id]);
   const queue = [scenes[0].id];
   while (queue.length) {
     const cur = queue.shift();
-    (adj[cur] || []).forEach(nx => {
-      if (depth[nx] === undefined) { depth[nx] = depth[cur] + 1; queue.push(nx); }
+    (adj[cur] || []).forEach(nx => { if (!seen.has(nx)) { seen.add(nx); queue.push(nx); } });
+  }
+  const unreachable = scenes.filter(s => !seen.has(s.id)).map(s => s.id);
+  /* 关系分层 */
+  const indeg = {};
+  edges.forEach(e => { if (ids.has(e.to)) (indeg[e.to] = indeg[e.to] || []).push(e.from); });
+  const depth = {};
+  scenes.forEach(s => { if (!(indeg[s.id] || []).length) depth[s.id] = 0; });
+  let guard = scenes.length * 3, moved = true;
+  while (moved && guard-- > 0) {
+    moved = false;
+    edges.forEach(e => {
+      if (!ids.has(e.to) || depth[e.from] === undefined) return;
+      const want = Math.min(depth[e.from] + 1, scenes.length);   /* 上限防环 */
+      if (depth[e.to] === undefined || depth[e.to] < want) { depth[e.to] = want; moved = true; }
     });
   }
-  const unreachable = scenes.filter(s => depth[s.id] === undefined).map(s => s.id);
+  scenes.forEach(s => { if (depth[s.id] === undefined) depth[s.id] = 0; });
   const maxDepth = Math.max(0, ...Object.values(depth));
-  unreachable.forEach(id => depth[id] = maxDepth + 1);
   /* 层内行号 */
   const rowOf = {}, layerCount = {};
   scenes.forEach(s => {
