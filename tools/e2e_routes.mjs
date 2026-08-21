@@ -83,7 +83,7 @@ async function stepState() {
   else if (st.t === 'check') await ev(`finishCheck()`);
   else if (st.t === 'choice') await ev(`document.querySelector('#choices .choice-btn:not(.disabled)').click()`);
   else if (st.t === 'dlg') await ev(`document.getElementById('dlg').click()`);
-  await sleep(70);
+  await sleep(40);
   return st.t;
 }
 
@@ -91,8 +91,9 @@ async function playToEnd(maxSteps) {
   for (let i = 0; i < maxSteps; i++) {
     const t = await stepState();
     if (t === 'end') return true;
-    if (t === 'locked') return false;
+    if (t === 'locked') { console.log('  [debug] 选项全锁 @', await ev(`script.scenes[sceneIdx].id`)); return false; }
   }
+  console.log('  [debug] 步数耗尽 @', await ev(`script.scenes[sceneIdx].id + ' line ' + lineIdx`));
   return false;
 }
 
@@ -151,7 +152,7 @@ async function main() {
       await ev(`document.getElementById('name-input-confirm').click()`);
     }
     await sleep(800);
-    const natural = await playToEnd(300);
+    const natural = await playToEnd(Math.max(300, (await ev(`script.scenes.length`)) * 120));
 
     /* 2) 每个结局场景强制跳入 */
     const endScenes = await ev(`script.scenes.filter(s => s.script.some(c => c.type === 'end')).map(s => s.id)`);
