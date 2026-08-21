@@ -254,7 +254,46 @@ def remap_assets(script, pool):
             report.append(f"  [素材] 角色 {cid}（{cdef.get('name')}）立绘 -> 库角色 {prefix}")
             cdef['sprites'] = new_sprites
             n += 1
-    # 场景 chars[].sprite 引用的表情若不在该角色 sprites 里，引擎会回退 normal，无需改
+    # 2.5) 站位 sprite 归一化：LLM 常把 sprite 写成脑补的图片路径
+    # （如 chars/c1_shen_yan_patrol.png），必须压回该角色映射套装的合法表情键。
+    EMO_KEYS = ('normal', 'smile', 'angry', 'sad', 'surprise', 'shy')
+    EMO_HINT = [('smile', ('smile', '笑')), ('angry', ('angry', '怒', '生气')),
+                ('sad', ('sad', '悲', '难过', '泪')), ('surprise', ('surprise', '惊')),
+                ('shy', ('shy', '害羞', '羞涩', '脸红'))]
+
+    def normalize_sprite(cid, raw):
+        cdef = characters.get(cid) or {}
+        valid = set((cdef.get('sprites') or {}).keys())
+        if not valid:
+            return raw  # 无立绘库，原样保留（引擎降级剪影）
+        if raw in valid:
+            return raw
+        text = str(raw or '').lower()
+        for emo, kws in EMO_HINT:
+            if emo in valid and any(k in text for k in kws):
+                return emo
+        return 'normal' if 'normal' in valid else sorted(valid)[0]
+
+    # cid -> 映射后 sprites 键集合，供站位归一化用（characters 已按库前缀改写）
+    for scene in script.get('scenes', []):
+        for ch in scene.get('chars') or []:
+            fixed = normalize_sprite(ch.get('id'), ch.get('sprite'))
+            if fixed != ch.get('sprite'):
+                report.append(f"  [素材] {scene['id']}: 站位表情 {ch.get('sprite')} -> {fixed}")
+                ch['sprite'] = fixed
+                n += 1
+
+    # 2.6) say 说话人不在站位表时自动补位（引擎运行时虽能补，显式写入更稳）
+    for scene in script.get('scenes', []):
+        onstage = {c.get('id') for c in (scene.get('chars') or [])}
+        used_pos = {c.get('pos') for c in (scene.get('chars') or [])}
+        for cmd in scene.get('script') or []:
+            if cmd.get('type') == 'say' and cmd.get('who') in characters                     and cmd['who'] not in onstage:
+                free = next((pp for pp in ('center', 'left', 'right') if pp not in used_pos), 'center')
+                scene.setdefault('chars', []).append({'id': cmd['who'], 'pos': free, 'sprite': 'normal'})
+                onstage.add(cmd['who']); used_pos.add(free)
+                report.append(f"  [站位] {scene['id']}: 补位 {cmd['who']} -> {free}")
+                n += 1
 
     # 3) CG（show.image / inspect.show.image）
     cg_used = {}
