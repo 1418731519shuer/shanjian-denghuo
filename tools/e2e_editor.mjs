@@ -466,6 +466,103 @@ async function main() {
     return `节点 ${nodes}、边 ${edges}、双击跳转、不可达标记 全通过`;
   });
 
+  /* ---------- 用例 i：分支图边编辑（改目标/删除） ---------- */
+  await runCase('i. 分支图：点边改目标 + 删除边', async () => {
+    await enterEditor();
+    await ev(`window.confirm = () => true; window.alert = () => {}`);
+    /* 找一条 goto 边 */
+    const tgt = await ev(`(() => {
+      for (let si = 0; si < script.scenes.length; si++)
+        for (let li = 0; li < script.scenes[si].script.length; li++) {
+          const c = script.scenes[si].script[li];
+          if (c.type === 'goto' && c.target) return { si, li, target: c.target };
+        }
+      return null;
+    })()`);
+    if (!tgt) return '剧本无 goto 边，跳过';
+    await click('#se-show-branch');
+    await waitFor(() => ev(`!document.getElementById('branch-overlay').classList.contains('hidden')`), 5000, '分支图打开');
+    /* 直接点第一条边 */
+    await ev(`document.querySelector('.br-edge').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+    await sleep(200);
+    if (!(await ev(`!!document.getElementById('branch-edge-retarget')`))) throw new Error('边信息条无改目标按钮');
+    /* 记录该边当前目标，再改目标 */
+    const info1 = await ev(`document.getElementById('branch-info').textContent`);
+    await click('#branch-edge-retarget');
+    await waitFor(() => ev(`!!document.querySelector('.se-grid-pop')`), 5000, '目标网格弹出');
+    await ev(`(() => { const cells = [...document.querySelectorAll('.se-grid-pop .se-grid-cell')]; cells[cells.length - 1].click(); })()`);
+    await sleep(500);
+    /* 重渲染后再点同一条边，确认目标已变 */
+    await ev(`document.querySelector('.br-edge').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+    await sleep(200);
+    const info2 = await ev(`document.getElementById('branch-info').textContent`);
+    if (info1 === info2) throw new Error('改目标未生效: ' + info2.slice(0, 60));
+    /* 删除这条边（goto=删整条指令） */
+    const edgesBefore = await ev(`document.querySelectorAll('.br-edge').length`);
+    await ev(`document.querySelector('.br-edge').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+    await sleep(200);
+    await click('#branch-edge-del');
+    await sleep(500);
+    const edgesAfter = await ev(`document.querySelectorAll('.br-edge').length`);
+    if (edgesAfter >= edgesBefore) throw new Error(`删除后边数未减：${edgesBefore}→${edgesAfter}`);
+    /* 撤销复原 */
+    await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }))`);
+    await sleep(300);
+    await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }))`);
+    await sleep(300);
+    await click('#branch-overlay [data-close]');
+    return `改目标（信息条 ${info1.slice(0, 30)}… → ${info2.slice(0, 30)}…）→ 删除边 → 撤销复原`;
+  });
+
+  /* ---------- 用例 j：拖手柄连边建分支 + 节点右键菜单 ---------- */
+  await runCase('j. 分支图：拖▶手柄连边 + 右键菜单删场景', async () => {
+    await enterEditor();
+    await ev(`window.confirm = () => true; window.alert = () => {}`);
+    await click('#se-show-branch');
+    await waitFor(() => ev(`!document.getElementById('branch-overlay').classList.contains('hidden')`), 5000, '分支图打开');
+    /* 取节点 0 手柄与节点 2 中心的屏幕坐标 */
+    const coords = await ev(`(() => {
+      const nodes = [...document.querySelectorAll('.br-node')];
+      const h = nodes[0].querySelector('.br-handle').getBoundingClientRect();
+      const t = nodes[2].getBoundingClientRect();
+      return { hx: h.x + 9, hy: h.y + 9, tx: t.x + 40, ty: t.y + 30,
+               from: nodes[0].dataset.sid, to: nodes[2].dataset.sid };
+    })()`);
+    const lenBefore = await ev(`script.scenes.find(s => s.id === '${coords.from}').script.length`);
+    /* CDP 鼠标拖拽：handle → 目标节点 */
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: coords.hx, y: coords.hy, button: 'left', clickCount: 1 });
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: (coords.hx + coords.tx) / 2, y: (coords.hy + coords.ty) / 2 });
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: coords.tx, y: coords.ty });
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: coords.tx, y: coords.ty, button: 'left', clickCount: 1 });
+    await sleep(400);
+    if (!(await ev(`!!document.getElementById('br-menu')`))) throw new Error('连边菜单未弹出');
+    await ev(`document.querySelector('#br-menu a[data-op="goto"]').click()`);
+    await sleep(500);
+    const last = await ev(`(() => { const s = script.scenes.find(s => s.id === '${coords.from}'); const c = s.script[s.script.length - 1]; return c.type + '→' + c.target; })()`);
+    if (last !== 'goto→' + coords.to) throw new Error('连边未写入: ' + last);
+    /* 右键菜单：删场景（删一个不可达的尾场景避免连锁）——先撤销连边 */
+    await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }))`);
+    await sleep(400);
+    const nBefore = await ev(`script.scenes.length`);
+    await ev(`(() => {
+      const nodes = [...document.querySelectorAll('.br-node')];
+      const last = nodes[nodes.length - 1];
+      last.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 400, clientY: 300 }));
+    })()`);
+    await sleep(300);
+    if (!(await ev(`!!document.getElementById('br-menu')`))) throw new Error('右键菜单未弹出');
+    await ev(`document.querySelector('#br-menu a[data-op="del"]').click()`);
+    await sleep(500);
+    const nAfter = await ev(`script.scenes.length`);
+    if (nAfter !== nBefore - 1) throw new Error(`删场景失败：${nBefore}→${nAfter}`);
+    /* 撤销复原 */
+    await ev(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }))`);
+    await sleep(300);
+    if ((await ev(`script.scenes.length`)) !== nBefore) throw new Error('撤销未复原场景数');
+    await click('#branch-overlay [data-close]');
+    return `连边 ${coords.from}→${coords.to} 写入+撤销、右键删场景+撤销 全通过`;
+  });
+
   /* ================= 汇总 ================= */
   console.log('\n================ E2E（编辑器）结果 ================');
   let pass = 0;

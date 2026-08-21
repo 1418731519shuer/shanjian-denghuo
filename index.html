@@ -1859,19 +1859,19 @@ function renderBranchGraph() {
   const edges = [];
   const ghosts = new Set();
   scenes.forEach((s, si) => {
-    const addEdge = (to, label, kind, li) => {
+    const addEdge = (to, label, kind, li, oi, sub) => {
       if (!to) return;
       if (!ids.has(to)) ghosts.add(to);
-      edges.push({ from: s.id, to, label, kind, si, li });
+      edges.push({ from: s.id, to, label, kind, si, li, oi, sub });
     };
     if (s.require_else) addEdge(s.require_else, '条件不满足', 'require', -1);
     (s.script || []).forEach((c, li) => {
       if (c.type === 'goto') addEdge(c.target, '跳转', 'goto', li);
-      if (c.type === 'choice') (c.options || []).forEach(o =>
-        addEdge(o.goto, (o.text || '').slice(0, 8) + (o.if ? ' [' + o.if + ']' : ''), 'choice', li));
+      if (c.type === 'choice') (c.options || []).forEach((o, oi) =>
+        addEdge(o.goto, (o.text || '').slice(0, 8) + (o.if ? ' [' + o.if + ']' : ''), 'choice', li, oi));
       if (c.type === 'check') {
-        if (c.success && c.success.goto) addEdge(c.success.goto, '✓判定成功', 'check-ok', li);
-        if (c.fail && c.fail.goto) addEdge(c.fail.goto, '✗判定失败', 'check-fail', li);
+        if (c.success && c.success.goto) addEdge(c.success.goto, '✓判定成功', 'check-ok', li, undefined, 'success');
+        if (c.fail && c.fail.goto) addEdge(c.fail.goto, '✗判定失败', 'check-fail', li, undefined, 'fail');
       }
     });
   });
@@ -1942,12 +1942,21 @@ function renderBranchGraph() {
     pe.setAttribute('stroke-width', '3.5');
     const e = edges[parseInt(pe.dataset.ei, 10)];
     $('branch-info').innerHTML = `边：${e.from} 第${e.li + 1}条 → <b>${e.to}</b>（${e.kind} ${e.label}） ` +
-      (e.li >= 0 ? `<a href="javascript:void 0" id="branch-edge-jump" style="color:#ffd75e">跳到该指令</a>` : '');
+      (e.li >= 0 ? `<a href="javascript:void 0" id="branch-edge-jump" style="color:#ffd75e">跳到该指令</a>` : '') +
+      ` <a href="javascript:void 0" id="branch-edge-retarget" style="color:#7fa0d0">✎改目标</a>` +
+      ` <a href="javascript:void 0" id="branch-edge-del" style="color:#e74c3c">🗑删除</a>`;
     const j = $('branch-edge-jump');
     if (j) j.onclick = () => {
       $('branch-overlay').classList.add('hidden');
       selectEditorScene(e.si);
       previewLine(script.scenes[e.si], e.li);
+    };
+    $('branch-edge-retarget').onclick = () => {
+      pickJumpTarget($('branch-info'), e.to, v => { brEdgeSetTarget(e, v); brAfterEdit(); });
+    };
+    $('branch-edge-del').onclick = () => {
+      if (!confirm(`删除跳转：${e.from} → ${e.to}（${e.kind}）？`)) return;
+      brEdgeDelete(e); brAfterEdit();
     };
   }));
 
@@ -1955,6 +1964,7 @@ function renderBranchGraph() {
   scenes.forEach((s, i) => {
     const n = document.createElement('div');
     n.className = 'br-node';
+    n.dataset.sid = s.id;
     const isEnd = endScenes.has(s.id), noReach = unreachable.includes(s.id);
     const bg = s.background && s.background !== 'none' ? `background:url('${assetUrl(s.background)}') center/cover` : 'background:#1a2233';
     n.style.cssText = `position:absolute;left:${pos[s.id].x}px;top:${pos[s.id].y}px;width:${NW}px;height:${NH}px;
@@ -1963,6 +1973,17 @@ function renderBranchGraph() {
     n.innerHTML = `<div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(5,8,15,.25),rgba(5,8,15,.88))"></div>
       <div style="position:absolute;left:6px;right:6px;bottom:4px;font-size:11px;font-weight:bold">${s.id}
         ${s.checkpoint ? ' ★' : ''}${isEnd ? ' 🏁' : ''}${noReach ? ' <span style="color:#d8b93a">不可达</span>' : ''}</div>`;
+    /* 连边手柄：拖到别的节点建跳转 */
+    const handle = document.createElement('div');
+    handle.className = 'br-handle';
+    handle.textContent = '▶';
+    handle.title = '按住拖到目标场景：创建分支跳转';
+    handle.style.cssText = `position:absolute;right:-7px;top:50%;margin-top:-9px;width:18px;height:18px;border-radius:50%;
+      background:#4a6da0;color:#fff;font-size:9px;line-height:18px;text-align:center;cursor:crosshair;z-index:3`;
+    handle.addEventListener('mousedown', ev => { ev.stopPropagation(); ev.preventDefault(); brLinkStart(s.id, ev); });
+    n.appendChild(handle);
+    /* 右键菜单：编辑/重命名/删除场景 */
+    n.oncontextmenu = ev => { ev.preventDefault(); ev.stopPropagation(); brNodeMenu(s, i, ev.clientX, ev.clientY); };
     n.title = (s.script[0] && (s.script[0].text || '')).slice(0, 40);
     n.onclick = () => {
       world.querySelectorAll('.br-node').forEach(x => x.style.outline = '');
@@ -1997,7 +2018,7 @@ function renderBranchGraph() {
   if (!cv._brBound) {
     cv._brBound = true;
     let pan = { x: 20, y: 20 }, scale = 1, drag = null;
-    const apply = () => { world.style.transform = `translate(${pan.x}px,${pan.y}px) scale(${scale})`; };
+    const apply = () => { world.style.transform = `translate(${pan.x}px,${pan.y}px) scale(${scale})`; cv._pan = pan; cv._scale = scale; };
     apply();
     cv.addEventListener('mousedown', ev => {
       if (ev.target.closest('.br-node,.br-ghost,.br-edge')) return;
@@ -2012,8 +2033,147 @@ function renderBranchGraph() {
       apply();
     }, { passive: false });
   }
-  $('branch-info').innerHTML = '点击节点看摘要 · 双击进入编辑 · 点边看来源 · 空白处拖拽平移 · 滚轮缩放';
+  $('branch-info').innerHTML = '点击节点看摘要 · 双击进入编辑 · 右键节点菜单 · 拖节点▶手柄连边建分支 · 点边可改目标/删除 · 空白拖拽平移 · 滚轮缩放';
 }
+
+
+/* ---- 分支图编辑操作（连边/改目标/删边/节点菜单） ---- */
+/* 改目标 / 删边后的统一收尾：重渲编辑器+分支图+入撤销栈 */
+function brAfterEdit() {
+  if (edSceneIdx >= 0) selectEditorScene(edSceneIdx); else refreshEditorScenes();
+  renderBranchGraph();
+}
+/* 按边类型把目标写回剧本 */
+function brEdgeSetTarget(e, v) {
+  const sc = script.scenes[e.si];
+  if (e.kind === 'require') { if (v) sc.require_else = v; else delete sc.require_else; return; }
+  const cmd = sc.script[e.li];
+  if (!cmd) return;
+  if (e.kind === 'goto') { if (v) cmd.target = v; else delete cmd.target; }
+  else if (e.kind === 'choice') { const o = (cmd.options || [])[e.oi]; if (o) { if (v) o.goto = v; else delete o.goto; } }
+  else if (e.kind === 'check-ok' || e.kind === 'check-fail') {
+    const o = cmd[e.sub]; if (o) { if (v) o.goto = v; else delete o.goto; }
+  }
+}
+/* 删除边对应的跳转（goto=删整条指令；choice=删该选项；check=删分支goto；require=删require_else） */
+function brEdgeDelete(e) {
+  const sc = script.scenes[e.si];
+  if (e.kind === 'require') { delete sc.require_else; return; }
+  const cmd = sc.script[e.li];
+  if (!cmd) return;
+  if (e.kind === 'goto') sc.script.splice(e.li, 1);
+  else if (e.kind === 'choice') {
+    cmd.options.splice(e.oi, 1);
+    if (!cmd.options.length) sc.script.splice(e.li, 1);   /* 选项删光连 choice 一起删 */
+  }
+  else if (e.kind === 'check-ok' || e.kind === 'check-fail') { if (cmd[e.sub]) delete cmd[e.sub].goto; }
+}
+/* 拖手柄连边：from → 目标节点，松手弹出建边方式 */
+function brLinkStart(fromId, ev0) {
+  const cv = $('branch-canvas'), svg = $('branch-svg'), world = $('branch-world');
+  const fromEl = [...world.querySelectorAll('.br-node')].find(n => n.dataset.sid === fromId);
+  if (!fromEl) return;
+  const toWorld = ev => {
+    const r = cv.getBoundingClientRect();
+    const p = cv._pan || { x: 20, y: 20 }, sc2 = cv._scale || 1;
+    return { x: (ev.clientX - r.left - p.x) / sc2, y: (ev.clientY - r.top - p.y) / sc2 };
+  };
+  const sx = parseFloat(fromEl.style.left) + 170, sy = parseFloat(fromEl.style.top) + 37;
+  const tmp = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  tmp.setAttribute('stroke', '#ffd75e'); tmp.setAttribute('stroke-width', '2.5');
+  tmp.setAttribute('stroke-dasharray', '6,4'); tmp.setAttribute('fill', 'none');
+  svg.appendChild(tmp);
+  const move = ev => {
+    const w = toWorld(ev);
+    tmp.setAttribute('d', 'M' + sx + ',' + sy + ' C' + ((sx + w.x) / 2) + ',' + sy + ' ' + ((sx + w.x) / 2) + ',' + w.y + ' ' + w.x + ',' + w.y);
+  };
+  const up = ev => {
+    window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
+    tmp.remove();
+    const el = document.elementFromPoint(ev.clientX, ev.clientY);
+    const node = el && el.closest('.br-node');
+    if (!node || node.dataset.sid === fromId) return;
+    brLinkMenu(fromId, node.dataset.sid, ev.clientX, ev.clientY);
+  };
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', up);
+}
+/* 连边方式菜单：加跳转指令 / 加选项分支 */
+function brLinkMenu(fromId, toId, x, y) {
+  brCloseMenu();
+  const m = document.createElement('div');
+  m.id = 'br-menu';
+  m.style.cssText = 'position:fixed;left:' + x + 'px;top:' + y + 'px;z-index:130;background:rgba(10,12,20,.97);border:1px solid #3a4a63;' +
+    'border-radius:6px;padding:.4em .6em;font-size:.8em;line-height:2;box-shadow:0 8px 30px rgba(0,0,0,.6)';
+  m.innerHTML = '<div style="opacity:.6;font-size:.85em">' + fromId + ' → ' + toId + '</div>' +
+    '<div><a href="javascript:void 0" data-op="goto" style="color:#9ab">⏭ 在「' + fromId + '」末尾加跳转指令</a></div>' +
+    '<div><a href="javascript:void 0" data-op="choice" style="color:#7fa0d0">🔀 在「' + fromId + '」末尾加选项分支</a></div>' +
+    '<div><a href="javascript:void 0" data-op="cancel" style="opacity:.5">取消</a></div>';
+  m.onclick = ev => ev.stopPropagation();
+  document.body.appendChild(m);
+  setTimeout(() => document.addEventListener('click', brCloseMenu, { once: true }), 0);
+  m.querySelectorAll('a').forEach(a => a.onclick = () => {
+    const op = a.dataset.op; brCloseMenu();
+    if (op === 'cancel') return;
+    const sc = script.scenes.find(s => s.id === fromId);
+    if (!sc) return;
+    if (op === 'goto') sc.script.push({ type: 'goto', target: toId });
+    else sc.script.push({ type: 'choice', options: [{ text: '新分支', goto: toId }, { text: '留下' }] });
+    brAfterEdit();
+  });
+}
+/* 节点右键菜单 */
+function brNodeMenu(sc, idx, x, y) {
+  brCloseMenu();
+  const m = document.createElement('div');
+  m.id = 'br-menu';
+  m.style.cssText = 'position:fixed;left:' + x + 'px;top:' + y + 'px;z-index:130;background:rgba(10,12,20,.97);border:1px solid #3a4a63;' +
+    'border-radius:6px;padding:.4em .6em;font-size:.8em;line-height:2;box-shadow:0 8px 30px rgba(0,0,0,.6)';
+  m.innerHTML = '<div style="opacity:.6;font-size:.85em">' + sc.id + '</div>' +
+    '<div><a href="javascript:void 0" data-op="edit" style="color:#ffd75e">✏️ 进入编辑</a></div>' +
+    '<div><a href="javascript:void 0" data-op="rename" style="color:#9ab">改名（同步引用）</a></div>' +
+    '<div><a href="javascript:void 0" data-op="del" style="color:#e74c3c">🗑 删除场景</a></div>' +
+    '<div><a href="javascript:void 0" data-op="cancel" style="opacity:.5">取消</a></div>';
+  m.onclick = ev => ev.stopPropagation();
+  document.body.appendChild(m);
+  setTimeout(() => document.addEventListener('click', brCloseMenu, { once: true }), 0);
+  m.querySelectorAll('a').forEach(a => a.onclick = () => {
+    const op = a.dataset.op; brCloseMenu();
+    if (op === 'edit') { $('branch-overlay').classList.add('hidden'); selectEditorScene(idx); }
+    else if (op === 'rename') {
+      const nid = prompt('重命名场景 ID（同步更新所有跳转引用）：', sc.id);
+      if (!nid || nid === sc.id) return;
+      if (!/^[A-Za-z0-9_\-]+$/.test(nid)) { alert('ID 只能含字母、数字、下划线、连字符'); return; }
+      if (script.scenes.some(s => s.id === nid)) { alert('ID「' + nid + '」已存在'); return; }
+      const oldId = sc.id; sc.id = nid;
+      script.scenes.forEach(s2 => {
+        if (s2.require_else === oldId) s2.require_else = nid;
+        (s2.script || []).forEach(c => {
+          if (c.type === 'goto' && c.target === oldId) c.target = nid;
+          if (c.type === 'choice') (c.options || []).forEach(o => { if (o.goto === oldId) o.goto = nid; });
+          if (c.type === 'check') ['success', 'fail'].forEach(k => { if (c[k] && c[k].goto === oldId) c[k].goto = nid; });
+        });
+      });
+      brAfterEdit();
+    }
+    else if (op === 'del') {
+      let refs = 0;
+      script.scenes.forEach(s2 => {
+        if (s2.require_else === sc.id) refs++;
+        (s2.script || []).forEach(c => {
+          if (c.type === 'goto' && c.target === sc.id) refs++;
+          if (c.type === 'choice') (c.options || []).forEach(o => { if (o.goto === sc.id) refs++; });
+        });
+      });
+      if (script.scenes.length <= 1) { alert('至少保留一个场景'); return; }
+      if (!confirm('删除场景「' + sc.id + '」？' + (refs ? '\n警告：有 ' + refs + ' 处跳转引用它，删除后会变悬空。' : ''))) return;
+      script.scenes.splice(idx, 1);
+      if (edSceneIdx >= script.scenes.length) edSceneIdx = script.scenes.length - 1;
+      brAfterEdit();
+    }
+  });
+}
+function brCloseMenu() { const m = $('br-menu'); if (m) m.remove(); }
 
 function buildBranchGraph() {
   const ids = script.scenes.map(s=>s.id);
