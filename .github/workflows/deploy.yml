@@ -14,7 +14,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 质量门禁：剧本 lint + 全结局试玩机器人，不过则不部署
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 安装依赖
+        run: pip install Pillow
+
+      - name: 构建（lint 与试玩都以 dist 产物为准）
+        run: python tools/build.py
+
+      - name: 剧本质量门禁（结构/可达/数值经济/类型规范）
+        run: python tools/lint_script.py
+
+      - name: 安装无头浏览器
+        run: npx -y playwright@latest install chromium --with-deps
+
+      - name: 全结局试玩机器人
+        run: |
+          export E2E_BROWSER=$(echo ~/.cache/ms-playwright/chromium-*/chrome-linux/chrome)
+          node tools/e2e_routes.mjs
+
   build-deploy:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

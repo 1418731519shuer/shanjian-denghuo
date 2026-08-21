@@ -328,6 +328,22 @@ def repair_links(script, cards, report):
                     if o.get("goto"):
                         o["goto"] = fix_target(o["goto"], s["id"])
 
+    # --- 2.45) 站位表情归一化：不在该角色立绘键里的表情压回合法值 ---
+    EMO_MAP = {"hurt": "sad", "scared": "sad", "worried": "sad",
+               "cry": "sad", "fear": "sad", "shy": "smile", "happy": "smile",
+               "angry": "angry", "surprise": "surprise", "surprised": "surprise"}
+    for s in script["scenes"]:
+        for ch in s.get("chars") or []:
+            cdef = script["characters"].get(ch.get("id")) or {}
+            valid = set((cdef.get("sprites") or {}).keys())
+            sp = ch.get("sprite")
+            if valid and sp and sp not in valid:
+                fixed = EMO_MAP.get(str(sp).lower())
+                if fixed not in valid:
+                    fixed = "normal" if "normal" in valid else sorted(valid)[0]
+                ch["sprite"] = fixed
+                report.append(f"{s['id']}: 站位表情 {sp} -> {fixed}")
+
     # --- 2.5) require 归一化（LLM 会写成对象 {k:v}/{k:"==1"}，引擎要表达式字符串） ---
     for s in script["scenes"]:
         req = s.get("require")

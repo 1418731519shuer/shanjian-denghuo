@@ -5,7 +5,10 @@ cd /d "%~dp0"
 set PASS=0
 set FAIL=0
 set FAILED=
-for %%T in (e2e_test e2e_text_script e2e_editor e2e_display e2e_mobile e2e_sprite_check e2e_ai_gen_panel smoke_ai_gen) do (
+echo ========== lint_script ╬Г╠╬це╫Ш ==========
+python tools\lint_script.py
+if errorlevel 1 (set /a FAIL+=1 & set "FAILED=!FAILED! lint_script") else (set /a PASS+=1)
+for %%T in (e2e_test e2e_text_script e2e_editor e2e_display e2e_mobile e2e_sprite_check e2e_ai_gen_panel e2e_routes smoke_ai_gen) do (
   if exist tools\%%T.mjs (
     echo.
     echo ========== %%T ==========

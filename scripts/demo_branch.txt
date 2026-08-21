@@ -24,7 +24,7 @@
 ?
 > 陪苏璃放灯 {favor+6} -> s2_lantern
 > 去竹林闭关 {xiuwei+15} -> s2_bamboo
-> 直接闯山门 [xiuwei>=20] -> s3_test
+> 直接闯山门 [xiuwei>=12] -> s3_test
 
 ==场景 s2_lantern 背景=lantern_shop 音乐=shop_warm
 @su smile left
@@ -47,7 +47,7 @@
 > 与沈青再切磋一轮 [xiuwei>=10] {xiuwei+10} -> s3_test
 > 下山赴试 -> s3_test
 
-==场景 s3_test 背景=bamboo_night 音乐=tense 存档点 进入条件="xiuwei>=20 || favor>=10" 条件跳转=s3_fallback
+==场景 s3_test 背景=bamboo_night 音乐=tense 存档点 进入条件="xiuwei>=12 || favor>=10" 条件跳转=s3_fallback
 @wan normal center
 @mo normal left
 山门试炼，一剑问心。掌门端坐云台之上，莫师兄侍立一旁。

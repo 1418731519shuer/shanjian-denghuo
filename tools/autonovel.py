@@ -258,7 +258,8 @@ def remap_assets(script, pool):
     # （如 chars/c1_shen_yan_patrol.png），必须压回该角色映射套装的合法表情键。
     EMO_KEYS = ('normal', 'smile', 'angry', 'sad', 'surprise', 'shy')
     EMO_HINT = [('smile', ('smile', '笑')), ('angry', ('angry', '怒', '生气')),
-                ('sad', ('sad', '悲', '难过', '泪')), ('surprise', ('surprise', '惊')),
+                ('sad', ('sad', '悲', '难过', '泪', 'hurt', 'scared', 'worried', '受伤', '害怕', '担忧')),
+                ('surprise', ('surprise', '惊')),
                 ('shy', ('shy', '害羞', '羞涩', '脸红'))]
 
     def normalize_sprite(cid, raw):

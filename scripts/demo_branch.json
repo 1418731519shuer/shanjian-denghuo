@@ -125,7 +125,7 @@
             },
             {
               "goto": "s3_test",
-              "if": "xiuwei>=20",
+              "if": "xiuwei>=12",
               "text": "直接闯山门"
             }
           ]
@@ -309,7 +309,7 @@
       "background": "bg/bamboo_night.jpg",
       "bgm": "bgm/tense.mp3",
       "checkpoint": true,
-      "require": "xiuwei>=20 || favor>=10",
+      "require": "xiuwei>=12 || favor>=10",
       "require_else": "s3_fallback",
       "chars": [
         {
