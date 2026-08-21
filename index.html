@@ -130,6 +130,17 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000;
   #menubar { gap:4px; }
   #menubar .btn { min-width:34px; min-height:34px; padding:.15em .4em; font-size:.72em; }
 }
+/* 手机横屏（矮屏）适配：对话框压扁、立绘放高、菜单紧凑 */
+@media (orientation: landscape) and (max-height:520px) {
+  #dlg { height:42vh; min-height:96px; padding:1.4vh 4vw calc(1.4vh + env(safe-area-inset-bottom, 0px)); }
+  #dlgtext { font-size:clamp(13px, 2.6vh, 18px); line-height:1.55; }
+  #namebox { font-size:clamp(12px, 2.4vh, 16px); }
+  .slot { height:92%; }
+  #choices { bottom:44vh; gap:.5vh; }
+  .choice-btn { padding:.5em 1.2em; font-size:clamp(13px, 2.6vh, 18px); min-height:36px; }
+  #menubar .btn { min-width:32px; min-height:32px; padding:.1em .4em; font-size:.7em; }
+  #advance-hint { font-size:.75em; }
+}
 
 .slotgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:.6em; }
 .saveslot { border:1px solid #3a4a63; border-radius:.4em; padding:.6em; cursor:pointer; font-size:.85em; min-height:4.5em; }

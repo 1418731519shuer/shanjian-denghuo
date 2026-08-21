@@ -469,8 +469,7 @@
               "goto": "act2_inside",
               "set": {
                 "favor_c4": "favor_c4+5"
-              },
-              "if": "favor_c4>=10"
+              }
             }
           ]
         },
@@ -566,8 +565,7 @@
               "goto": "act3_core",
               "set": {
                 "favor_c5": "favor_c5+5"
-              },
-              "if": "favor_c5>=10"
+              }
             },
             {
               "text": "甩出一道符纸逼退魔修，直奔祭坛方向",
@@ -1267,7 +1265,7 @@
               "set": {
                 "k": "k+1"
               },
-              "if": "favor_c6>=8"
+              "if": "favor_c6>=6"
             },
             {
               "text": "佯装妥协绕到魔宗弟子身后，伺机射出暗器救人",
@@ -1396,7 +1394,7 @@
               "set": {
                 "favor_c8": "favor_c8+5"
               },
-              "if": "favor_c8>=8",
+              "if": "favor_c8>=4",
               "goto": "end_c8"
             },
             {
@@ -1451,7 +1449,7 @@
               "set": {
                 "favor_c8": "favor_c8+5"
               },
-              "if": "favor_c8>=15"
+              "if": "favor_c8>=12"
             },
             {
               "text": "苏狸妖力耗尽，身体逐渐缩小，最终只剩一团火红的狐尾留在我掌心",
@@ -1519,7 +1517,7 @@
               "set": {
                 "favor_c3": "favor_c3+10"
               },
-              "if": "favor_c3>=15"
+              "if": "favor_c3>=7"
             },
             {
               "text": "要打便打，别在这里惺惺作态",
