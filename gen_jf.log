@@ -1,0 +1,46 @@
+立绘待生成 33 张
+== rembg 批量抠图 33 张（子进程加载一次模型）==
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c1_normal.png.png  335x962
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c1_smile.png.png  485x999
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c1_sad.png.png  295x880
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c2_normal.png.png  661x930
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c2_smile.png.png  616x927
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c2_sad.png.png  533x919
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c3_normal.png.png  488x954
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c3_smile.png.png  370x960
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c3_sad.png.png  436x914
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c4_normal.png.png  520x931
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c4_smile.png.png  559x972
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c4_sad.png.png  278x812
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c5_normal.png.png  514x998
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c5_smile.png.png  557x995
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c5_sad.png.png  583x903
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c6_normal.png.png  319x937
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c6_smile.png.png  532x849
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c6_sad.png.png  492x947
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c7_normal.png.png  344x921
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c7_smile.png.png  341x869
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c7_sad.png.png  498x984
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c8_normal.png.png  606x930
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c8_smile.png.png  503x904
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c8_sad.png.png  566x933
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c9_normal.png.png  365x938
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c9_smile.png.png  494x916
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c9_sad.png.png  521x894
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c10_normal.png.png  471x901
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c10_smile.png.png  479x864
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c10_sad.png.png  578x987
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c11_normal.png.png  245x959
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c11_smile.png.png  642x1002
+  rembg OK  E:/a-xiuxian/wenyou\demo_gl\games\jiufeng\assets\chars\c11_sad.png.png  442x885
+比例统一 33 张（高 1024、脚贴底）
+bg OK sect_day
+bg OK sect_night
+bg OK cliff
+bg OK forest
+bg OK town
+bg OK battle
+bg OK peak
+背景绑定回写 25 个场景
+变体重建：7 图，缺 33 ['chars/c10_normal.png', 'chars/c10_sad.png', 'chars/c10_smile.png', 'chars/c11_normal.png', 'chars/c11_sad.png']
+素材生成完成

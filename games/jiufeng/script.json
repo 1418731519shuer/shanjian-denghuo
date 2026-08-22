@@ -15,9 +15,9 @@
       "color": "#FFD9A0",
       "look": "身量高挑，总穿不合身的碧色弟子服，发间总簪着从山下摘的白兰，左手腕内侧有一道月牙形旧疤",
       "sprites": {
-        "normal": "chars/mo_normal.png",
-        "smile": "chars/mo_smile.png",
-        "sad": "chars/mo_sad.png"
+        "normal": "chars/c1_normal.webp",
+        "smile": "chars/c1_smile.webp",
+        "sad": "chars/c1_sad.webp"
       }
     },
     "c2": {
@@ -25,9 +25,9 @@
       "color": "#9FC0FF",
       "look": "总穿赤色劲装，眉间有一道浅疤，握剑的手上满是老茧，腰间挂着她爹留下的旧剑穗",
       "sprites": {
-        "normal": "chars/tang_normal.png",
-        "smile": "chars/tang_smile.png",
-        "sad": "chars/tang_sad.png"
+        "normal": "chars/c2_normal.webp",
+        "smile": "chars/c2_smile.webp",
+        "sad": "chars/c2_sad.webp"
       }
     },
     "c3": {
@@ -35,9 +35,9 @@
       "color": "#9FC0FF",
       "look": "总穿洗得发白的青衣，指尖沾着药草渍，脖子上挂着半块缺了的白玉佩",
       "sprites": {
-        "normal": "chars/wan_normal.png",
-        "smile": "chars/wan_smile.png",
-        "sad": "chars/wan_sad.png"
+        "normal": "chars/c3_normal.webp",
+        "smile": "chars/c3_smile.webp",
+        "sad": "chars/c3_sad.webp"
       }
     },
     "c4": {
@@ -45,9 +45,9 @@
       "color": "#9FC0FF",
       "look": "总穿洗得发白的灰衣，怯生生的，眼睛很大，指腹上有画符磨出来的茧",
       "sprites": {
-        "normal": "chars/mo_normal.png",
-        "smile": "chars/mo_smile.png",
-        "sad": "chars/mo_sad.png"
+        "normal": "chars/c4_normal.webp",
+        "smile": "chars/c4_smile.webp",
+        "sad": "chars/c4_sad.webp"
       }
     },
     "c5": {
@@ -55,9 +55,9 @@
       "color": "#9FC0FF",
       "look": "总穿玄色短打，头发总是乱蓬蓬的，腰间别着一把断了一半的铁剑",
       "sprites": {
-        "normal": "chars/shen_normal.png",
-        "smile": "chars/shen_smile.png",
-        "sad": "chars/shen_sad.png"
+        "normal": "chars/c5_normal.webp",
+        "smile": "chars/c5_smile.webp",
+        "sad": "chars/c5_sad.webp"
       }
     },
     "c6": {
@@ -65,9 +65,9 @@
       "color": "#9FC0FF",
       "look": "总穿紫黑色的裙子，发间簪着红梅，脸上有一道从眉骨划到下巴的疤（是女主上次比武划的）",
       "sprites": {
-        "normal": "chars/su_normal.png",
-        "smile": "chars/su_smile.png",
-        "sad": "chars/su_sad.png"
+        "normal": "chars/c6_normal.webp",
+        "smile": "chars/c6_smile.webp",
+        "sad": "chars/c6_sad.webp"
       }
     },
     "c7": {
@@ -75,9 +75,9 @@
       "color": "#9FC0FF",
       "look": "总穿白色的执法服，发间簪着羊脂玉簪，看起来温温柔柔的，执法时却半点不留情",
       "sprites": {
-        "normal": "chars/tang_normal.png",
-        "smile": "chars/tang_smile.png",
-        "sad": "chars/tang_sad.png"
+        "normal": "chars/c7_normal.webp",
+        "smile": "chars/c7_smile.webp",
+        "sad": "chars/c7_sad.webp"
       }
     },
     "c8": {
@@ -85,9 +85,9 @@
       "color": "#9FC0FF",
       "look": "十六七岁的少年模样，总穿洗得发白的白衣，笑起来有两个梨涡，是女主前世的师弟",
       "sprites": {
-        "normal": "chars/wan_normal.png",
-        "smile": "chars/wan_smile.png",
-        "sad": "chars/wan_sad.png"
+        "normal": "chars/c8_normal.webp",
+        "smile": "chars/c8_smile.webp",
+        "sad": "chars/c8_sad.webp"
       }
     },
     "c9": {
@@ -95,9 +95,9 @@
       "color": "#9FC0FF",
       "look": "总穿粗布衣服，手上尽是锻造磨出来的茧，头发随便挽着，笑起来有两个虎牙",
       "sprites": {
-        "normal": "chars/mo_normal.png",
-        "smile": "chars/mo_smile.png",
-        "sad": "chars/mo_sad.png"
+        "normal": "chars/c9_normal.webp",
+        "smile": "chars/c9_smile.webp",
+        "sad": "chars/c9_sad.webp"
       }
     },
     "c10": {
@@ -105,9 +105,9 @@
       "color": "#9FC0FF",
       "look": "总穿鹅黄色的弟子服，发间簪着金步摇，看起来娇滴滴的，其实心里门儿清",
       "sprites": {
-        "normal": "chars/shen_normal.png",
-        "smile": "chars/shen_smile.png",
-        "sad": "chars/shen_sad.png"
+        "normal": "chars/c10_normal.webp",
+        "smile": "chars/c10_smile.webp",
+        "sad": "chars/c10_sad.webp"
       }
     },
     "c11": {
@@ -115,9 +115,9 @@
       "color": "#9FC0FF",
       "look": "总穿黑色劲装，脸上蒙着面纱，笑起来很甜，说话却总带刺",
       "sprites": {
-        "normal": "chars/su_normal.png",
-        "smile": "chars/su_smile.png",
-        "sad": "chars/su_sad.png"
+        "normal": "chars/c11_normal.webp",
+        "smile": "chars/c11_smile.webp",
+        "sad": "chars/c11_sad.webp"
       }
     }
   },
@@ -125,7 +125,7 @@
   "scenes": [
     {
       "id": "ch001",
-      "background": "bg/bamboo_night.jpg",
+      "background": "bg/sect_day.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -315,7 +315,7 @@
     },
     {
       "id": "ch002",
-      "background": "bg/festival_night.jpg",
+      "background": "bg/sect_day.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -547,7 +547,7 @@
     },
     {
       "id": "ch003",
-      "background": "bg/ferry_night.jpg",
+      "background": "bg/sect_day.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -735,7 +735,7 @@
     },
     {
       "id": "ch004",
-      "background": "bg/lantern_shop.jpg",
+      "background": "bg/sect_day.webp",
       "checkpoint": true,
       "chars": [],
       "script": [
@@ -851,7 +851,7 @@
     },
     {
       "id": "ch005",
-      "background": "bg/town_day.jpg",
+      "background": "bg/cliff.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -1022,7 +1022,7 @@
     },
     {
       "id": "ch006",
-      "background": "bg/bamboo_night.jpg",
+      "background": "bg/cliff.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -1192,7 +1192,7 @@
     },
     {
       "id": "ch007",
-      "background": "bg/lantern_shop.jpg",
+      "background": "bg/sect_day.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -1395,7 +1395,7 @@
     },
     {
       "id": "ch008",
-      "background": "bg/festival_night.jpg",
+      "background": "bg/sect_night.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -1623,7 +1623,7 @@
     },
     {
       "id": "ch009",
-      "background": "bg/ferry_night.jpg",
+      "background": "bg/peak.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -1835,7 +1835,7 @@
     },
     {
       "id": "ch010",
-      "background": "bg/town_day.jpg",
+      "background": "bg/sect_day.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -2019,7 +2019,7 @@
     },
     {
       "id": "ch011",
-      "background": "bg/lantern_shop.jpg",
+      "background": "bg/cliff.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -2182,7 +2182,7 @@
     },
     {
       "id": "ch012",
-      "background": "bg/bamboo_night.jpg",
+      "background": "bg/sect_night.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -2366,7 +2366,7 @@
     },
     {
       "id": "ch013",
-      "background": "bg/festival_night.jpg",
+      "background": "bg/battle.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -2583,7 +2583,7 @@
     },
     {
       "id": "ch014",
-      "background": "bg/ferry_night.jpg",
+      "background": "bg/town.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -2911,7 +2911,7 @@
     },
     {
       "id": "ch015",
-      "background": "bg/street_night.jpg",
+      "background": "bg/sect_night.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -3063,7 +3063,7 @@
     },
     {
       "id": "ch016",
-      "background": "bg/town_day.jpg",
+      "background": "bg/sect_day.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -3354,7 +3354,7 @@
     },
     {
       "id": "ch017",
-      "background": "bg/lantern_shop.jpg",
+      "background": "bg/sect_day.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -3538,7 +3538,7 @@
     },
     {
       "id": "ch018",
-      "background": "bg/ferry_night.jpg",
+      "background": "bg/sect_day.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -3694,7 +3694,7 @@
     },
     {
       "id": "ch019",
-      "background": "bg/lantern_shop.jpg",
+      "background": "bg/battle.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -3914,7 +3914,7 @@
     },
     {
       "id": "ch020",
-      "background": "bg/bamboo_night.jpg",
+      "background": "bg/forest.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -4002,7 +4002,7 @@
     },
     {
       "id": "ch021",
-      "background": "bg/restaurant_evening.jpg",
+      "background": "bg/forest.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -4190,7 +4190,7 @@
     },
     {
       "id": "ch022",
-      "background": "bg/festival_night.jpg",
+      "background": "bg/sect_night.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -4418,7 +4418,7 @@
     },
     {
       "id": "ch023",
-      "background": "bg/restaurant_evening.jpg",
+      "background": "bg/forest.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -4574,7 +4574,7 @@
     },
     {
       "id": "ch024",
-      "background": "bg/restaurant_evening.jpg",
+      "background": "bg/forest.webp",
       "checkpoint": true,
       "chars": [
         {
@@ -4790,7 +4790,7 @@
     },
     {
       "id": "ch025",
-      "background": "bg/town_day.jpg",
+      "background": "bg/battle.webp",
       "checkpoint": true,
       "chars": [
         {
